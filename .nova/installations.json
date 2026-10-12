@@ -1,0 +1,16 @@
+{
+  "requireApproval": true,
+  "requests": [
+    {
+      "id": "req_1791794526959_s09xd",
+      "projectId": "4c38ccb0-0a9a-410d-be43-25e97f033aa3",
+      "firstName": "Ancienne app",
+      "deviceId": "legacy_c4ea766a755ddee0",
+      "status": "approved",
+      "createdAt": "2026-10-12T08:42:06.959Z",
+      "updatedAt": "2026-10-12T08:43:24.104Z",
+      "platform": "Android APK (ancienne version)",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+    }
+  ]
+}
