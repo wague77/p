@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Heart, Star, Trophy, History } from "lucide-react";
+import { Heart, Star, Trophy, History, TrendingUp } from "lucide-react";
 import HistoryAnalysisModal from "../components/HistoryAnalysisModal";
+import CotesEvolutionModal from "../components/CotesEvolutionModal";
 import { isRealQuinteCourse, saveRealQuinteRecord } from "../lib/quinteHistory";
 import Header from "../components/Header";
 import ResponsiblePlay from "../components/ResponsiblePlay";
@@ -58,6 +59,7 @@ export default function PartantsPage({
   const [error, setError] = useState("");
   const [favId, setFavId] = useState<string | null>(null);
   const [favBusy, setFavBusy] = useState(false);
+  const [selectedPartantForCotes, setSelectedPartantForCotes] = useState<Participant | null>(null);
 
   useEffect(() => {
     const rNum = Number(reunion?.numOfficiel);
@@ -291,7 +293,11 @@ export default function PartantsPage({
                 </h3>
                 <ul className="flex flex-col gap-2">
                   {sortedParts.map((p, index) => (
-                    <PartantRow key={`${String(p?.numPmu ?? index)}-${String(p?.nom ?? "")}`} participant={p} />
+                    <PartantRow
+                      key={`${String(p?.numPmu ?? index)}-${String(p?.nom ?? "")}`}
+                      participant={p}
+                      onOpenCotes={() => setSelectedPartantForCotes(p)}
+                    />
                   ))}
                 </ul>
               </section>
@@ -301,6 +307,12 @@ export default function PartantsPage({
           </>
         ) : null}
       </main>
+
+      <CotesEvolutionModal
+        isOpen={!!selectedPartantForCotes}
+        onClose={() => setSelectedPartantForCotes(null)}
+        participant={selectedPartantForCotes}
+      />
     </div>
   );
 }
@@ -581,7 +593,7 @@ function calculateMusiqueSuccess(musique: string | undefined) {
   return { rate, text: `${top3Count} place(s) dans le top 3 sur ${total || last5.length} courses`, races, top3Count, total: total || last5.length };
 }
 
-function PartantRow({ participant }: { participant: Participant }) {
+function PartantRow({ participant, onOpenCotes }: { participant: Participant; onOpenCotes: () => void }) {
   const np = isNonPartant(participant);
   const sexe = sexeLabel(participant?.sexe);
   const age = participant?.age ? `${String(participant.age)} ans` : "";
@@ -599,7 +611,18 @@ function PartantRow({ participant }: { participant: Participant }) {
               {String(participant?.nom || "Cheval")}
               {np ? <span className="ml-2 text-xs font-semibold text-red-300">Non-partant</span> : null}
             </p>
-            <p className="shrink-0 text-sm font-black text-amber-300">{formatCote(participant?.dernierRapportDirect?.rapport)}</p>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-sm font-black text-amber-300">{formatCote(participant?.dernierRapportDirect?.rapport)}</span>
+              <button
+                type="button"
+                onClick={onOpenCotes}
+                className="inline-flex items-center gap-1 rounded-xl bg-amber-400/20 px-2.5 py-1 text-xs font-bold text-amber-300 border border-amber-400/40 hover:bg-amber-400/30"
+                title="Voir le graphique d'évolution de la cote"
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
+                <span>Cotes</span>
+              </button>
+            </div>
           </div>
           <p className="mt-0.5 text-sm text-emerald-100/80">{[age, sexe].filter(Boolean).join(" · ") || "Âge n.c."}</p>
           <p className="mt-1 text-sm text-emerald-50/90">
@@ -679,4 +702,3 @@ function ArrivalBanner({ participants }: { participants: Participant[] }) {
     </section>
   );
 }
-

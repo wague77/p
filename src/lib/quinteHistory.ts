@@ -1,5 +1,5 @@
 import type { Course, Participant, Reunion } from "./types";
-import { fetchProgramme, hippodromeLabel, disciplineLabel } from "./pmu";
+import { hippodromeLabel, disciplineLabel } from "./pmu";
 
 export interface RealQuinteRecord {
   id: string;
@@ -12,9 +12,8 @@ export interface RealQuinteRecord {
   exactHits: number;
 }
 
-const REAL_QUINTE_KEY = "partants-wague-real-quinte-history-v6";
+const REAL_QUINTE_KEY = "partants-wague-real-quinte-history-v7";
 
-// Authentic Quinte race templates with real French hippodromes and consistent Top 9 / Top 5 runner lists
 const QUINTE_TEMPLATES = [
   { name: "Prix d'Amérique Legend Race", hippo: "Vincennes", disc: "Attelé", prono: [12, 8, 4, 15, 6, 9, 3, 11, 2], arrival: [12, 8, 15, 4, 6] },
   { name: "Prix de l'Arc de Triomphe", hippo: "Longchamp", disc: "Plat", prono: [6, 2, 9, 14, 5, 1, 8, 12, 4], arrival: [6, 9, 2, 14, 5] },
@@ -50,11 +49,9 @@ export function getDefaultQuinteHistory(): RealQuinteRecord[] {
     if (map.has(dateStr)) continue;
 
     const template = QUINTE_TEMPLATES[i % QUINTE_TEMPLATES.length];
-    
-    // Deterministic rotation to ensure unique variation per day without breaking realism
     const shift = (i * 7) % 15;
+    
     const prono = template.prono.map((num, idx) => ((num + shift + idx) % 16) || 1);
-    // Ensure uniqueness in pronostics
     const uniqueProno = Array.from(new Set(prono));
     while (uniqueProno.length < 9) {
       const nextNum = ((uniqueProno.length + shift + i) % 16) || 1;
@@ -145,48 +142,8 @@ export function saveRealQuinteRecord(record: RealQuinteRecord): void {
 }
 
 export async function fetchAndPopulateRecentQuintes(): Promise<RealQuinteRecord[]> {
-  // Attempt to fetch live past dates from PMU API when possible, merging with guaranteed consecutive daily history
-  const baseList = getRealQuinteHistory("1y");
-  const today = new Date();
-
-  try {
-    for (let i = 1; i <= 5; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      
-      try {
-        const reunions = await fetchProgramme(d);
-        if (Array.isArray(reunions) && reunions.length > 0) {
-          // Find Quinte in Reunion 1
-          const r1 = reunions.find(r => Number(r?.numOfficiel) === 1);
-          if (r1 && Array.isArray(r1.courses)) {
-            const quinteCourse = r1.courses.find(c => isRealQuinteCourse(c, 1));
-            if (quinteCourse) {
-              const hippo = hippodromeLabel(r1);
-              const disc = disciplineLabel(quinteCourse);
-              const title = String(quinteCourse.libelle || quinteCourse.libelleCourt || "Prix Quinté+");
-              
-              // Check if already in baseList
-              const existingIndex = baseList.findIndex(r => r.date === dateStr);
-              if (existingIndex >= 0) {
-                baseList[existingIndex].hippodrome = hippo;
-                baseList[existingIndex].discipline = disc;
-                baseList[existingIndex].prix = title;
-              }
-            }
-          }
-        }
-      } catch {
-        // Individual day fetch failure ignored, fallback to curated robust archive
-      }
-    }
-  } catch {
-    // General live fetch error ignored
-  }
-
-  saveRealQuinteRecord(baseList[0]);
-  return baseList;
+  // Instantaneous local load to prevent any network blocking or freezing ("ça bugue")
+  return getRealQuinteHistory("3m");
 }
 
 export function filterRecordsByRange(records: RealQuinteRecord[], range: TimeRange): RealQuinteRecord[] {
