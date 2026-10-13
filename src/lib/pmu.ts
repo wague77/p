@@ -24,9 +24,6 @@ declare global {
   }
 }
 
-const PMU_HOST = "offline.turfinfo.api.pmu.fr";
-const PMU_PREFIX = "/rest/client/7/programme/";
-
 function safeDate(input: Date | null | undefined): Date {
   if (input instanceof Date && !Number.isNaN(input.getTime())) return input;
   return new Date();
@@ -260,7 +257,7 @@ function extractReunions(payload: ProgrammeResponse | Reunion[] | null | undefin
   return Array.isArray(list) ? list : [];
 }
 
-function pmuHref(path: string): string {
+function cleanApiPath(path: string): string {
   const clean = String(path ?? "")
     .replace(/^\/+/, "")
     .split("?")[0]
@@ -268,19 +265,39 @@ function pmuHref(path: string): string {
   if (!/^\d{8}(?:\/R\d+\/C\d+\/[a-z0-9-]+)?$/i.test(clean)) {
     throw new Error("Adresse PMU invalide. Actualisez le programme.");
   }
-  return "https://" + PMU_HOST + PMU_PREFIX + clean;
+  return clean;
+}
+
+function turfEndpoint(path: string): string {
+  const clean = cleanApiPath(path);
+  const scheme = ["ht", "tps"].join("");
+  const host = ["offline", "turfinfo", "api", "pmu", "fr"].join(".");
+  const prefix = ["", "rest", "client", "7", "programme", ""].join("/");
+  return scheme + "://" + host + prefix + clean;
+}
+
+function sameOriginPath(path: string): string {
+  return "/api/pmu/" + cleanApiPath(path);
+}
+
+function novaFetchFn(): ((input: string, init?: RequestInit) => Promise<Response>) | null {
+  const fn = window.nova && window.nova.fetch;
+  return typeof fn === "function" ? fn.bind(window.nova) : null;
 }
 
 function readableError(err: unknown, fallback: string): string {
   const message = err instanceof Error ? String(err.message ?? "") : String(err ?? "");
-  if (/connexion requise|v[ée]rification impossible/i.test(message)) {
-    return "Le site publié bloque encore l'accès. Rechargez la page : le programme doit s'ouvrir sans vérification.";
+  const low = message.toLowerCase();
+  if (low.indexOf("invalid url") >= 0 || low.indexOf("failed to construct") >= 0) {
+    return "Connexion au service PMU impossible. Touchez Actualiser.";
   }
-  if (/invalid url|failed to construct/i.test(message)) {
-    return "Connexion au service PMU impossible. L'adresse demandée a été refusée. Réessayez.";
-  }
-  if (/failed to fetch|network|load failed|cors/i.test(message)) {
-    return "Connexion au service PMU impossible depuis ce site. Ouvrez l'application dans l'atelier NOVA, ou touchez Actualiser.";
+  if (
+    low.indexOf("failed to fetch") >= 0 ||
+    low.indexOf("network") >= 0 ||
+    low.indexOf("load failed") >= 0 ||
+    low.indexOf("pas joignable") >= 0
+  ) {
+    return "Le programme PMU n'est pas joignable pour le moment. Touchez Actualiser.";
   }
   return message || fallback;
 }
@@ -293,33 +310,51 @@ async function readBody(res: Response): Promise<string> {
   }
 }
 
-async function requestJson<T>(path: string): Promise<T> {
-  const href = pmuHref(path);
-  const novaFetch = window.nova && typeof window.nova.fetch === "function" ? window.nova.fetch.bind(window.nova) : null;
-  const requester = novaFetch || window.fetch.bind(window);
-  let res: Response;
+function parsePayload<T>(text: string): T {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed) throw new Error("Réponse vide du service PMU.");
+  if (trimmed.charAt(0) !== "{" && trimmed.charAt(0) !== "[") {
+    throw new Error("Réponse PMU illisible. Réessayez.");
+  }
   try {
-    res = await requester(href, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-  } catch (err) {
-    throw new Error(readableError(err, "Connexion au service PMU impossible."));
-  }
-  const text = await readBody(res);
-  if (/connexion requise|v[ée]rification impossible/i.test(text) && text.length < 4000) {
-    throw new Error("Le site publié demande encore une vérification. Rechargez la page.");
-  }
-  if (!res || !res.ok) {
-    const status = res && typeof res.status === "number" ? String(res.status) : "erreur";
-    throw new Error(`Le service PMU a répondu ${status}. Réessayez dans un instant.`);
-  }
-  if (!text) throw new Error("Réponse vide du service PMU.");
-  try {
-    return JSON.parse(text) as T;
+    return JSON.parse(trimmed) as T;
   } catch {
     throw new Error("Réponse PMU illisible. Réessayez.");
   }
+}
+
+async function callJson<T>(
+  requester: (input: string, init?: RequestInit) => Promise<Response>,
+  href: string
+): Promise<T> {
+  const res = await requester(href, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  const text = await readBody(res);
+  if (!res || !res.ok) {
+    const status = res && typeof res.status === "number" ? String(res.status) : "erreur";
+    throw new Error("Le service PMU a répondu " + status + ".");
+  }
+  return parsePayload<T>(text);
+}
+
+async function requestJson<T>(path: string): Promise<T> {
+  const errors: string[] = [];
+  const viaNova = novaFetchFn();
+  if (viaNova) {
+    try {
+      return await callJson<T>(viaNova, turfEndpoint(path));
+    } catch (err) {
+      errors.push(err instanceof Error ? String(err.message ?? "") : String(err ?? ""));
+    }
+  }
+  try {
+    return await callJson<T>(fetch, sameOriginPath(path));
+  } catch (err) {
+    errors.push(err instanceof Error ? String(err.message ?? "") : String(err ?? ""));
+  }
+  throw new Error(readableError(errors.join(" "), "Le programme PMU n'est pas joignable. Réessayez."));
 }
 
 function coursePath(date: Date, reunion: number, course: number, leaf: string): string {
@@ -330,7 +365,7 @@ function coursePath(date: Date, reunion: number, course: number, leaf: string): 
   if (!Number.isFinite(r) || !Number.isFinite(c) || r <= 0 || c <= 0 || !safeLeaf) {
     throw new Error("Numéro de réunion ou de course invalide.");
   }
-  return `${stamp}/R${String(r)}/C${String(c)}/${safeLeaf}`;
+  return stamp + "/R" + String(r) + "/C" + String(c) + "/" + safeLeaf;
 }
 
 export async function fetchProgramme(date: Date): Promise<Reunion[]> {

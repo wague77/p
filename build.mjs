@@ -1,6 +1,4 @@
-import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { execSync } from "node:child_process";
 
-rmSync("dist", { recursive: true, force: true });
-mkdirSync("dist", { recursive: true });
-cpSync("public", "dist", { recursive: true });
-console.log("Partants PMU : page statique prête dans dist/");
+execSync("npx vite build", { stdio: "inherit" });
+console.log("Partants PMU : build Vite prêt dans dist/");
