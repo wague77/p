@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Heart, Star } from "lucide-react";
+import { Heart, Star, Trophy, History } from "lucide-react";
+import HistoryAnalysisModal from "../components/HistoryAnalysisModal";
 import Header from "../components/Header";
 import ResponsiblePlay from "../components/ResponsiblePlay";
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "../components/StatusMessage";
@@ -244,7 +245,10 @@ export default function PartantsPage({
             )}
 
             {course && reunion ? (
-              <CourseCard reunion={reunion} course={course} favId={favId} favBusy={favBusy} onToggleFav={toggleFavorite} />
+              <>
+                <CourseCard reunion={reunion} course={course} favId={favId} favBusy={favBusy} onToggleFav={toggleFavorite} />
+                <ArrivalBanner participants={participants} />
+              </>
             ) : (
               <EmptyBlock message="Sélectionnez une course pour afficher sa fiche." />
             )}
@@ -252,8 +256,8 @@ export default function PartantsPage({
             {loading ? <LoadingBlock label="Chargement des partants et du pronostic…" /> : null}
             {!loading && error ? <ErrorBlock message={error} onRetry={onRefresh} /> : null}
 
-            {!loading && course ? (
-              <PronosticBlock selection={selection} participants={byNum} commentaire={commentaire} jeux={jeux} />
+            {!loading && course && reunion ? (
+              <PronosticBlock reunion={reunion} course={course} selection={selection} participants={byNum} commentaire={commentaire} jeux={jeux} />
             ) : null}
 
             {!loading && course && sortedParts.length === 0 && !error ? (
@@ -335,50 +339,106 @@ function Meta({ label, value }: { label: string; value: string }) {
 }
 
 function PronosticBlock({
+  reunion,
+  course,
   selection,
   participants,
   commentaire,
   jeux,
 }: {
+  reunion: Reunion;
+  course: Course;
   selection: SelectionItem[];
   participants: Map<number, Participant>;
   commentaire: string;
   jeux: { code: string; label: string; count: number }[];
 }) {
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const ranked = (Array.isArray(selection) ? selection : []).filter((s) => (s?.num_partant ?? s?.numPartant) != null);
   const gameList = Array.isArray(jeux) ? jeux : [];
+
+  function getCategory(cote: number) {
+    if (!cote || cote <= 6) {
+      return {
+        label: "Favori",
+        badge: "bg-emerald-500/30 text-emerald-300 border-emerald-500/60 font-black",
+        card: "border-emerald-500/50 bg-gradient-to-r from-emerald-950/80 via-[#08291b] to-[#08291b]",
+      };
+    }
+    if (cote <= 16) {
+      return {
+        label: "Outsider",
+        badge: "bg-amber-400/30 text-amber-200 border-amber-400/60 font-black",
+        card: "border-amber-500/50 bg-gradient-to-r from-amber-950/80 via-[#08291b] to-[#08291b]",
+      };
+    }
+    return {
+      label: "Tocard",
+      badge: "bg-rose-500/30 text-rose-200 border-rose-500/60 font-black",
+      card: "border-rose-500/50 bg-gradient-to-r from-rose-950/80 via-[#08291b] to-[#08291b]",
+    };
+  }
+
   return (
     <section className="rounded-3xl border border-amber-500/25 bg-[#103c28] p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Star className="h-5 w-5 fill-amber-300 text-amber-300" />
-        <h3 className="text-lg font-black text-amber-50">Pronostic Wague</h3>
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Star className="h-5 w-5 fill-amber-300 text-amber-300" />
+          <h3 className="text-lg font-black text-amber-50">Pronostic Wague</h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsHistoryOpen(true)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-amber-400 px-3.5 text-xs font-black text-[#062214] shadow hover:bg-amber-300"
+        >
+          <History className="h-4 w-4" />
+          Historique & Écarts (1M - 1An)
+        </button>
       </div>
 
       {ranked.length === 0 ? (
         <p className="text-sm text-emerald-100/80">Le pronostic détaillé n'est pas encore disponible pour cette course.</p>
       ) : (
-        <ol className="flex flex-col gap-2">
+        <ol className="flex flex-col gap-2.5">
           {ranked.map((item, index) => {
             const num = Number(item?.num_partant ?? item?.numPartant ?? 0);
             const horse = participants.get(num);
-            const cote = item?.cote_prob ?? item?.coteProb ?? horse?.dernierRapportDirect?.rapport;
+            const cote = Number(item?.cote_prob ?? item?.coteProb ?? horse?.dernierRapportDirect?.rapport ?? 10);
+            const cat = getCategory(cote);
+
             return (
-              <li key={`${String(item?.rang ?? index)}-${num}`} className="flex min-h-11 items-center gap-3 rounded-2xl bg-[#08291b] px-3 py-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-[#062214]">
-                  {String(item?.rang || index + 1)}
-                </span>
-                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-400/50 text-sm font-bold text-amber-200">
-                  {String(num || "–")}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-semibold text-white">
-                  {String(horse?.nom || item?.nom || `N°${num}`)}
-                </span>
-                <span className="text-sm font-bold text-amber-300">{formatCote(cote)}</span>
+              <li key={`${String(item?.rang ?? index)}-${num}`} className={`flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-2.5 shadow-md ${cat.card}`}>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-[#062214]">
+                    {String(item?.rang || index + 1)}
+                  </span>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-400/50 text-sm font-bold text-amber-200">
+                    {String(num || "–")}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-semibold text-white">
+                    {String(horse?.nom || item?.nom || `N°${num}`)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${cat.badge}`}>
+                    {cat.label}
+                  </span>
+                  <span className="text-sm font-bold text-amber-300 w-14 text-right">{formatCote(cote)}</span>
+                </div>
               </li>
             );
           })}
         </ol>
       )}
+
+      <HistoryAnalysisModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        reunion={reunion}
+        course={course}
+        selection={selection}
+        participants={participants}
+      />
 
       {commentaire ? (
         <p className="mt-4 rounded-2xl bg-[#062214]/80 p-3 text-sm leading-relaxed text-emerald-50">{commentaire}</p>
@@ -426,12 +486,53 @@ function PronosticBlock({
   );
 }
 
+interface RaceStatItem {
+  token: string;
+  pos: number | null;
+  isTop3: boolean;
+}
+
+function calculateMusiqueSuccess(musique: string | undefined) {
+  if (!musique || typeof musique !== "string") return { rate: 0, text: "Pas de données", races: [] as RaceStatItem[], top3Count: 0, total: 0 };
+  const rawTokens = musique.trim().split(/\s+/).filter(Boolean);
+  let tokens: string[] = [];
+  if (rawTokens.length <= 1 && musique.length > 2) {
+    const matches = musique.match(/(\d+[a-zA-Z]*|[a-zA-Z]\d*)/g);
+    tokens = matches ? matches : rawTokens;
+  } else {
+    tokens = rawTokens;
+  }
+
+  const last5 = tokens.slice(0, 5);
+  const races: RaceStatItem[] = [];
+  let top3Count = 0;
+  let total = 0;
+
+  for (const t of last5) {
+    const match = t.match(/^(\d+)/);
+    if (match) {
+      const pos = Number(match[1]);
+      total++;
+      const isTop3 = pos >= 1 && pos <= 3;
+      if (isTop3) top3Count++;
+      races.push({ token: t, pos, isTop3 });
+    } else {
+      races.push({ token: t, pos: null, isTop3: false });
+    }
+  }
+
+  const rate = total > 0 ? Math.round((top3Count / total) * 100) : 0;
+  return { rate, text: `${top3Count} place(s) dans le top 3 sur ${total || last5.length} courses`, races, top3Count, total: total || last5.length };
+}
+
 function PartantRow({ participant }: { participant: Participant }) {
   const np = isNonPartant(participant);
   const sexe = sexeLabel(participant?.sexe);
   const age = participant?.age ? `${String(participant.age)} ans` : "";
+  const stats = calculateMusiqueSuccess(participant?.musique);
+
   return (
-    <li className={`rounded-2xl border px-3 py-3 ${np ? "border-emerald-900 bg-[#07180f] opacity-60" : "border-emerald-800 bg-[#0b3222]"}`}>
+    <li className={`rounded-2xl border px-3.5 py-3.5 ${np ? "border-emerald-900 bg-[#07180f] opacity-60" : "border-emerald-800 bg-[#0b3222]"}`}>
       <div className="flex items-start gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-400 text-base font-black text-[#062214]">
           {String(participant?.numPmu ?? "–")}
@@ -453,9 +554,73 @@ function PartantRow({ participant }: { participant: Participant }) {
             <span className="text-emerald-300/70">Entraîneur · </span>
             {String(participant?.entraineur || "—")}
           </p>
-          <p className="mt-1 font-mono text-xs tracking-wide text-amber-100/80">Musique {String(participant?.musique || "—")}</p>
+
+          <div className="mt-2.5 rounded-2xl bg-[#062214]/80 p-3 border border-emerald-800/60">
+            <div className="flex items-center justify-between gap-2 text-xs mb-2">
+              <span className="font-bold text-emerald-200">Statistiques (5 dern. courses : Top 3)</span>
+              <span className="font-black text-amber-300">{stats.rate}% ({stats.text})</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-[#0a3320] mb-2.5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-500"
+                style={{ width: `${stats.rate}%` }}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] text-emerald-300/80 mr-1">Détail 5 courses :</span>
+              {stats.races.length === 0 ? (
+                <span className="text-[11px] text-emerald-400">Aucune donnée</span>
+              ) : (
+                stats.races.map((r, i) => (
+                  <span
+                    key={i}
+                    className={`inline-flex items-center justify-center rounded-lg px-2 py-0.5 text-[11px] font-black ${
+                      r.isTop3
+                        ? "bg-amber-400 text-[#062214]"
+                        : "bg-[#0a3320] border border-emerald-800 text-emerald-300"
+                    }`}
+                    title={r.isTop3 ? `Podium (${r.pos}°)` : `Course (${r.token})`}
+                  >
+                    {r.token}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </li>
   );
 }
+
+function ArrivalBanner({ participants }: { participants: Participant[] }) {
+  const arrived = participants.filter((p) => typeof p?.ordreArrivee === "number" && p.ordreArrivee > 0);
+  if (arrived.length === 0) return null;
+  arrived.sort((a, b) => (a.ordreArrivee || 99) - (b.ordreArrivee || 99));
+
+  return (
+    <section className="rounded-3xl border border-amber-400 bg-gradient-to-r from-amber-500/20 via-[#0b3a24] to-[#08291b] p-4 shadow-xl">
+      <div className="flex items-center gap-2 mb-3 text-amber-300">
+        <Trophy className="h-5 w-5 fill-amber-300" />
+        <h3 className="text-lg font-black text-amber-50">Arrivée Officielle</h3>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {arrived.slice(0, 6).map((p) => (
+          <div key={p.numPmu} className="flex items-center gap-3 rounded-2xl bg-[#062214]/80 p-3 border border-amber-500/30">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-[#062214]">
+              {p.ordreArrivee}°
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-amber-300">N°{p.numPmu}</p>
+              <p className="truncate font-bold text-white text-sm">{p.nom || "Cheval"}</p>
+            </div>
+            {p.dernierRapportDirect?.rapport ? (
+              <span className="text-xs font-black text-amber-200">{formatCote(p.dernierRapportDirect.rapport)}</span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+

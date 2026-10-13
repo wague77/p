@@ -6,8 +6,25 @@
     <title>Partants Wague</title>
     <meta name="description" content="Programme, partants, cotes et résultats Wague en temps réel." />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem("partants-wague-theme-mode") || "system";
+          var dark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) {
+            document.documentElement.classList.add("dark");
+            document.documentElement.style.colorScheme = "dark";
+          } else {
+            document.documentElement.classList.add("light");
+            document.documentElement.style.colorScheme = "light";
+          }
+        } catch(e) {}
+      })();
+    </script>
     <style>
-      html, body, #root { margin: 0; min-height: 100%; background: #04180f; color: #ecfdf5; }
+      html, body, #root { margin: 0; min-height: 100%; transition: background-color 0.2s ease, color 0.2s ease; }
+      html.dark, html.dark body, html.dark #root { background: #04180f; color: #ecfdf5; }
+      html.light, html.light body, html.light #root { background: #f8fafc; color: #0f172a; }
     </style>
   </head>
   <body>
