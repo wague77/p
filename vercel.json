@@ -1,7 +1,7 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "node build.mjs",
   "outputDirectory": "dist",
-  "framework": "vite",
+  "framework": null,
   "headers": [
     {
       "source": "/(.*)",
