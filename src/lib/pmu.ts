@@ -24,7 +24,8 @@ declare global {
   }
 }
 
-const PMU_BASE = "https://offline.turfinfo.api.pmu.fr/rest/client/7/programme";
+const PMU_HOST = "offline.turfinfo.api.pmu.fr";
+const PMU_PREFIX = "/rest/client/7/programme/";
 
 function safeDate(input: Date | null | undefined): Date {
   if (input instanceof Date && !Number.isNaN(input.getTime())) return input;
@@ -259,7 +260,7 @@ function extractReunions(payload: ProgrammeResponse | Reunion[] | null | undefin
   return Array.isArray(list) ? list : [];
 }
 
-function pmuUrl(path: string): string {
+function pmuHref(path: string): string {
   const clean = String(path ?? "")
     .replace(/^\/+/, "")
     .split("?")[0]
@@ -267,28 +268,35 @@ function pmuUrl(path: string): string {
   if (!/^\d{8}(?:\/R\d+\/C\d+\/[a-z0-9-]+)?$/i.test(clean)) {
     throw new Error("Adresse PMU invalide. Actualisez le programme.");
   }
-  return `${PMU_BASE}/${clean}`;
+  return "https://" + PMU_HOST + PMU_PREFIX + clean;
 }
 
 function readableError(err: unknown, fallback: string): string {
   const message = err instanceof Error ? String(err.message ?? "") : String(err ?? "");
+  if (/connexion requise|v[ée]rification impossible/i.test(message)) {
+    return "Le site publié bloque encore l'accès. Rechargez la page : le programme doit s'ouvrir sans vérification.";
+  }
   if (/invalid url|failed to construct/i.test(message)) {
     return "Connexion au service PMU impossible. L'adresse demandée a été refusée. Réessayez.";
   }
   if (/failed to fetch|network|load failed|cors/i.test(message)) {
-    return "Connexion au service PMU impossible. Vérifiez le réseau, puis touchez Actualiser.";
+    return "Connexion au service PMU impossible depuis ce site. Ouvrez l'application dans l'atelier NOVA, ou touchez Actualiser.";
   }
   return message || fallback;
 }
 
-async function requestJson<T>(path: string): Promise<T> {
-  const href = pmuUrl(path);
-  if (href.indexOf("https://") !== 0) {
-    throw new Error("Adresse PMU invalide. Actualisez le programme.");
+async function readBody(res: Response): Promise<string> {
+  try {
+    return await res.text();
+  } catch {
+    return "";
   }
+}
 
+async function requestJson<T>(path: string): Promise<T> {
+  const href = pmuHref(path);
   const novaFetch = window.nova && typeof window.nova.fetch === "function" ? window.nova.fetch.bind(window.nova) : null;
-  const requester = novaFetch || fetch;
+  const requester = novaFetch || window.fetch.bind(window);
   let res: Response;
   try {
     res = await requester(href, {
@@ -298,15 +306,13 @@ async function requestJson<T>(path: string): Promise<T> {
   } catch (err) {
     throw new Error(readableError(err, "Connexion au service PMU impossible."));
   }
+  const text = await readBody(res);
+  if (/connexion requise|v[ée]rification impossible/i.test(text) && text.length < 4000) {
+    throw new Error("Le site publié demande encore une vérification. Rechargez la page.");
+  }
   if (!res || !res.ok) {
     const status = res && typeof res.status === "number" ? String(res.status) : "erreur";
     throw new Error(`Le service PMU a répondu ${status}. Réessayez dans un instant.`);
-  }
-  let text = "";
-  try {
-    text = await res.text();
-  } catch {
-    throw new Error("Réponse PMU illisible. Réessayez.");
   }
   if (!text) throw new Error("Réponse vide du service PMU.");
   try {
