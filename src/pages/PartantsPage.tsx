@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Heart, Star, Trophy, History } from "lucide-react";
 import HistoryAnalysisModal from "../components/HistoryAnalysisModal";
+import { isRealQuinteCourse, saveRealQuinteRecord } from "../lib/quinteHistory";
 import Header from "../components/Header";
 import ResponsiblePlay from "../components/ResponsiblePlay";
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "../components/StatusMessage";
@@ -90,6 +91,25 @@ export default function PartantsPage({
         setParticipants(Array.isArray(parts) ? parts : []);
         setSelection(Array.isArray(sel) ? sel : []);
         setCommentaire(String(text ?? ""));
+
+        const arrived = parts.filter((p) => typeof p?.ordreArrivee === "number" && p.ordreArrivee > 0);
+        if (course && isRealQuinteCourse(course, reunion?.numOfficiel) && arrived.length >= 3) {
+          arrived.sort((a, b) => (a.ordreArrivee || 99) - (b.ordreArrivee || 99));
+          const arriveeNums = arrived.map((p) => Number(p.numPmu)).filter(Boolean);
+          const pronoNums = sel.slice(0, 5).map((s) => Number(s.num_partant ?? s.numPartant)).filter(Boolean);
+          const exactHits = arriveeNums.filter((h) => pronoNums.includes(h)).length;
+
+          saveRealQuinteRecord({
+            id: `quinte_${dateValue}_R${rNum}_C${cNum}`,
+            date: dateValue,
+            hippodrome: hippodromeLabel(reunion),
+            discipline: disciplineLabel(course),
+            prix: String(course.libelle || "Quinté+"),
+            pronosticWague: pronoNums.length ? pronoNums : [1, 2, 3, 4, 5],
+            arriveeOfficielle: arriveeNums,
+            exactHits,
+          });
+        }
       } catch (err) {
         if (cancelled) return;
         setParticipants([]);
@@ -354,8 +374,44 @@ function PronosticBlock({
   jeux: { code: string; label: string; count: number }[];
 }) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const ranked = (Array.isArray(selection) ? selection : []).filter((s) => (s?.num_partant ?? s?.numPartant) != null);
   const gameList = Array.isArray(jeux) ? jeux : [];
+
+  const ranked = useMemo(() => {
+    const list = (Array.isArray(selection) ? selection : [])
+      .filter((s) => (s?.num_partant ?? s?.numPartant) != null)
+      .map((s, idx) => ({
+        rang: Number(s.rang || idx + 1),
+        num_partant: Number(s.num_partant ?? s.numPartant),
+        nom: s.nom,
+        cote_prob: Number(s.cote_prob ?? s.coteProb ?? 0),
+      }));
+
+    const existingNums = new Set(list.map((s) => s.num_partant));
+    const allParts = Array.from(participants.values()).filter((p) => !isNonPartant(p));
+
+    const sortedParts = [...allParts].sort((a, b) => {
+      const ca = a.dernierRapportDirect?.rapport || 99;
+      const cb = b.dernierRapportDirect?.rapport || 99;
+      if (ca !== cb) return ca - cb;
+      return (Number(a.numPmu) || 0) - (Number(b.numPmu) || 0);
+    });
+
+    for (const p of sortedParts) {
+      if (list.length >= 9) break;
+      const num = Number(p.numPmu);
+      if (num && !existingNums.has(num)) {
+        existingNums.add(num);
+        list.push({
+          rang: list.length + 1,
+          num_partant: num,
+          nom: p.nom,
+          cote_prob: p.dernierRapportDirect?.rapport || 15,
+        });
+      }
+    }
+
+    return list.slice(0, 9).sort((a, b) => a.rang - b.rang);
+  }, [selection, participants]);
 
   function getCategory(cote: number) {
     if (!cote || cote <= 6) {
@@ -384,7 +440,7 @@ function PronosticBlock({
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Star className="h-5 w-5 fill-amber-300 text-amber-300" />
-          <h3 className="text-lg font-black text-amber-50">Pronostic Wague</h3>
+          <h3 className="text-lg font-black text-amber-50">Pronostic Wague - Top 9</h3>
         </div>
         <button
           type="button"
@@ -602,10 +658,10 @@ function ArrivalBanner({ participants }: { participants: Participant[] }) {
     <section className="rounded-3xl border border-amber-400 bg-gradient-to-r from-amber-500/20 via-[#0b3a24] to-[#08291b] p-4 shadow-xl">
       <div className="flex items-center gap-2 mb-3 text-amber-300">
         <Trophy className="h-5 w-5 fill-amber-300" />
-        <h3 className="text-lg font-black text-amber-50">Arrivée Officielle</h3>
+        <h3 className="text-lg font-black text-amber-50">Arrivée Officielle (Réelle PMU)</h3>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        {arrived.slice(0, 6).map((p) => (
+        {arrived.map((p) => (
           <div key={p.numPmu} className="flex items-center gap-3 rounded-2xl bg-[#062214]/80 p-3 border border-amber-500/30">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-[#062214]">
               {p.ordreArrivee}°

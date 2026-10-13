@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from "react";
-import { History, TrendingUp, Award, Calendar, X, BarChart2, ShieldAlert, CheckCircle, Flame, Star, Zap } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { History, TrendingUp, Award, Calendar, X, BarChart2, ShieldAlert, CheckCircle, Flame, Star, Zap, Loader2 } from "lucide-react";
 import type { Course, Participant, Reunion, SelectionItem } from "../lib/types";
 import { formatCote } from "../lib/pmu";
-import { getQuinteHistory, calculateQuinteStats, computeReliableQuintePrediction, TimeRange } from "../lib/quinteHistory";
+import { getRealQuinteHistory, filterRecordsByRange, calculateRealQuinteStats, computeReliableQuintePrediction, fetchAndPopulateRecentQuintes, TimeRange, RealQuinteRecord } from "../lib/quinteHistory";
 
 interface Props {
   isOpen: boolean;
@@ -16,11 +16,10 @@ interface Props {
 export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course, selection, participants }: Props) {
   const [range, setRange] = useState<TimeRange>("3m");
   const [activeTab, setActiveTab] = useState<"predictions" | "history">("predictions");
+  const [loadingPast, setLoadingPast] = useState(false);
 
-  const hippodromeName = reunion?.hippodrome?.libelleCourt || reunion?.hippodrome?.libelleLong || "Vincennes";
-  
-  const historyRecords = useMemo(() => getQuinteHistory(range, hippodromeName), [range, hippodromeName]);
-  const stats = useMemo(() => calculateQuinteStats(historyRecords), [historyRecords]);
+  const records = useMemo(() => getRealQuinteHistory(range), [range]);
+  const stats = useMemo(() => calculateRealQuinteStats(records), [records]);
 
   const rawSelection = (Array.isArray(selection) ? selection : []).map(s => ({
     num_partant: s.num_partant ?? s.numPartant,
@@ -43,9 +42,9 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
   }
 
   const rangeLabels: Record<TimeRange, string> = {
-    "1m": "1 mois (Récent)",
-    "3m": "3 mois (Trimestriel)",
-    "1y": "1 an (Annuel)",
+    "1m": "1 mois (15 courses)",
+    "3m": "3 mois (45 courses)",
+    "1y": "1 an (120 courses)",
   };
 
   return (
@@ -65,28 +64,30 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
             <Flame className="h-6 w-6 font-black" />
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Analyse Mathématique & Écarts Quinté+</p>
-            <h2 className="text-xl font-black text-white">Historique Quinté+ & Pronostic Fiable</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-300">Passé Quinté+ & Écarts</p>
+            <h2 className="text-xl font-black text-white">Historique Quinté+ ({rangeLabels[range]}) & Pronostic Fiable</h2>
           </div>
         </div>
 
         {/* Time Range Selector */}
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-[#0a3320] p-2 border border-emerald-800">
-          <span className="flex items-center gap-1.5 px-3 text-xs font-bold text-amber-300">
-            <Calendar className="h-4 w-4" /> Horizon d'analyse :
-          </span>
-          {(["1m", "3m", "1y"] as TimeRange[]).map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRange(r)}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-                range === r ? "bg-amber-400 text-[#062214] shadow" : "bg-transparent text-emerald-200 hover:bg-emerald-800/50"
-              }`}
-            >
-              {rangeLabels[r]}
-            </button>
-          ))}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#0a3320] p-2 border border-emerald-800">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 px-3 text-xs font-bold text-amber-300">
+              <Calendar className="h-4 w-4" /> Période :
+            </span>
+            {(["1m", "3m", "1y"] as TimeRange[]).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRange(r)}
+                className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
+                  range === r ? "bg-amber-400 text-[#062214] shadow" : "bg-transparent text-emerald-200 hover:bg-emerald-800/50"
+                }`}
+              >
+                {rangeLabels[r]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Tabs: Predictions vs History Table */}
@@ -98,7 +99,7 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
               activeTab === "predictions" ? "border-amber-400 text-amber-300" : "border-transparent text-emerald-300/70 hover:text-white"
             }`}
           >
-            <Zap className="h-4 w-4" /> Pronostic Quinté+ Fiable (Méthode Écarts)
+            <Zap className="h-4 w-4" /> Pronostic Quinté+ Fiable (Écarts Réels)
           </button>
           <button
             type="button"
@@ -107,13 +108,13 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
               activeTab === "history" ? "border-amber-400 text-amber-300" : "border-transparent text-emerald-300/70 hover:text-white"
             }`}
           >
-            <History className="h-4 w-4" /> Historique Quinté+ ({rangeLabels[range]})
+            <History className="h-4 w-4" /> Historique & Arrivées Complètes ({records.length})
           </button>
         </div>
 
         {activeTab === "predictions" ? (
           <div className="flex flex-col gap-5">
-            {/* Mathematical Stats Cards */}
+            {/* Real Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="rounded-2xl border border-emerald-800 bg-[#0b3222] p-3.5">
                 <p className="text-[11px] uppercase tracking-wider text-emerald-300/80">Écart Favori</p>
@@ -131,9 +132,9 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
                 <p className="text-[11px] text-emerald-200/60 mt-0.5">Surprise potentielle</p>
               </div>
               <div className="rounded-2xl border border-emerald-800 bg-[#0b3222] p-3.5">
-                <p className="text-[11px] uppercase tracking-wider text-emerald-300/80">Réussite Quinté+</p>
+                <p className="text-[11px] uppercase tracking-wider text-emerald-300/80">Quinté+ Réel</p>
                 <p className="text-xl font-black text-amber-400 mt-1">{stats.quinteReussiteRate}%</p>
-                <p className="text-[11px] text-emerald-200/60 mt-0.5">{stats.totalRaces} Quinté+ analysés</p>
+                <p className="text-[11px] text-emerald-200/60 mt-0.5">{stats.totalRaces} sur {rangeLabels[range]}</p>
               </div>
             </div>
 
@@ -141,14 +142,14 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
             <div className="rounded-3xl border border-amber-400 bg-gradient-to-r from-amber-500/20 via-[#0b3a24] to-[#08291b] p-5 shadow-xl">
               <div className="flex items-center gap-2 mb-3 text-amber-300">
                 <Star className="h-5 w-5 fill-amber-300" />
-                <h3 className="text-base font-black text-amber-50">Sélection Quinté+ Optimisée par Calcul d'Écarts</h3>
+                <h3 className="text-base font-black text-amber-50">Sélection Quinté+ Optimisée ({rangeLabels[range]})</h3>
               </div>
               <p className="text-xs leading-relaxed text-emerald-100/90 mb-4">
-                Méthode mathématique basée sur le produit de la cote inverse, le taux de réussite historique de la catégorie sur {rangeLabels[range]} et le bonus d'écart par zone :
+                Calculs mathématiques réels des écarts et des cotes extraits des courses de Quinté+ pour la période de {rangeLabels[range]} :
               </p>
 
               {reliablePredictions.length === 0 ? (
-                <p className="text-xs text-emerald-300/70">Calculs en cours...</p>
+                <p className="text-xs text-emerald-300/70">Aucune sélection disponible pour cette course.</p>
               ) : (
                 <div className="flex flex-col gap-2.5">
                   {reliablePredictions.map((item, idx) => {
@@ -169,7 +170,7 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
                           <div>
                             <p className="font-bold text-white text-sm">{horse?.nom || item.nom || `N°${item.num}`}</p>
                             <p className="text-xs text-emerald-200/70">
-                              Cote : {formatCote(item.cote)} · Score de fiabilité : <strong className="text-amber-300">{item.reliabilityScore.toFixed(1)}</strong>
+                              Cote : {formatCote(item.cote)} · Score de fiabilité : <strong className="text-amber-300">{item.reliabilityScore}</strong>
                             </p>
                           </div>
                         </div>
@@ -186,11 +187,10 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-emerald-200/80">
-              Historique des <strong className="text-amber-300">{historyRecords.length}</strong> derniers Quinté+ ({rangeLabels[range]}) récupérés et comparés avec les arrivées officielles :
+              Affichage complet des arrivées et pronostics Wague (5 chevaux complets) pour la période <strong className="text-amber-300">{rangeLabels[range]}</strong> ({records.length} courses) :
             </p>
-
             <div className="max-h-[420px] overflow-y-auto pr-1 flex flex-col gap-2.5">
-              {historyRecords.map((rec) => (
+              {records.map((rec) => (
                 <div key={rec.id} className="rounded-2xl border border-emerald-800 bg-[#0b3222] p-4">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="text-xs font-bold text-amber-300">{rec.date} · {rec.hippodrome}</span>
@@ -200,11 +200,11 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div className="rounded-xl bg-[#062214] p-2.5">
-                      <p className="text-[11px] text-emerald-300/70 mb-1">Pronostic Wague :</p>
+                      <p className="text-[11px] text-emerald-300/70 mb-1">Pronostic Wague (5 chevaux) :</p>
                       <p className="font-bold text-amber-200">{rec.pronosticWague.join(" - ")}</p>
                     </div>
                     <div className="rounded-xl bg-[#062214] p-2.5">
-                      <p className="text-[11px] text-emerald-300/70 mb-1">Arrivée Officielle (API) :</p>
+                      <p className="text-[11px] text-emerald-300/70 mb-1">Arrivée Officielle (Top 5) :</p>
                       <p className="font-bold text-white">{rec.arriveeOfficielle.join(" - ")}</p>
                     </div>
                   </div>

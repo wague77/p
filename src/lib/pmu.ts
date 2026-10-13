@@ -370,22 +370,63 @@ function coursePath(date: Date, reunion: number, course: number, leaf: string): 
 
 export async function fetchProgramme(date: Date): Promise<Reunion[]> {
   const stamp = formatDateJJMMAAAA(date);
-  const data = await requestJson<ProgrammeResponse>(stamp);
-  const reunions = extractReunions(data)
-    .filter((item) => item && typeof item === "object")
-    .sort((a, b) => (Number(a?.numOfficiel) || 0) - (Number(b?.numOfficiel) || 0));
-  return reunions.map((item) => ({
-    ...item,
-    courses: Array.isArray(item.courses)
-      ? [...item.courses].sort((a, b) => (Number(a?.numOrdre) || 0) - (Number(b?.numOrdre) || 0))
-      : [],
-  }));
+  const cacheKey = `partants-wague-cache-prog-${stamp}`;
+  try {
+    const data = await requestJson<ProgrammeResponse>(stamp);
+    const reunions = extractReunions(data)
+      .filter((item) => item && typeof item === "object")
+      .sort((a, b) => (Number(a?.numOfficiel) || 0) - (Number(b?.numOfficiel) || 0));
+    const processed = reunions.map((item) => ({
+      ...item,
+      courses: Array.isArray(item.courses)
+        ? [...item.courses].sort((a, b) => (Number(a?.numOrdre) || 0) - (Number(b?.numOrdre) || 0))
+        : [],
+    }));
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(processed));
+    } catch {
+      /* ignore storage quota */
+    }
+    return processed;
+  } catch (err) {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
 }
 
 export async function fetchParticipants(date: Date, reunion: number, course: number): Promise<Participant[]> {
-  const data = await requestJson<ParticipantsResponse | Participant[]>(coursePath(date, reunion, course, "participants"));
-  const list = Array.isArray(data) ? data : data?.participants || [];
-  return Array.isArray(list) ? list : [];
+  const stamp = formatDateJJMMAAAA(date);
+  const cacheKey = `partants-wague-cache-parts-${stamp}-R${reunion}-C${course}`;
+  try {
+    const data = await requestJson<ParticipantsResponse | Participant[]>(coursePath(date, reunion, course, "participants"));
+    const list = Array.isArray(data) ? data : data?.participants || [];
+    const result = Array.isArray(list) ? list : [];
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(result));
+    } catch {
+      /* ignore */
+    }
+    return result;
+  } catch (err) {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
 }
 
 export async function fetchPronostics(date: Date, reunion: number, course: number): Promise<SelectionItem[]> {

@@ -15,6 +15,7 @@ import {
   uniqueParis,
 } from "../lib/pmu";
 import type { Course, Reunion } from "../lib/types";
+import { isRealQuinteCourse } from "../lib/quinteHistory";
 
 const DATE_KEY = "partants-pmu-date";
 
@@ -190,9 +191,16 @@ export default function ProgrammePage({
                         {String(c?.numOrdre ?? "–")}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-base font-bold text-white">
-                          {String(c?.libelle || `Course ${String(c?.numOrdre ?? "")}`)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="block truncate text-base font-bold text-white">
+                            {String(c?.libelle || `Course ${String(c?.numOrdre ?? "")}`)}
+                          </span>
+                          {isRealQuinteCourse(c, reunion?.numOfficiel) ? (
+                            <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-[#062214]">
+                              ⭐ QUINTÉ+ R1
+                            </span>
+                          ) : null}
+                        </div>
                         <span className="mt-1 block text-sm text-emerald-100/75">
                           {formatHeure(c?.heureDepart)} ·{" "}
                           {c?.distance ? `${String(c.distance)} m` : "Distance n.c."} · {disciplineLabel(c)} ·{" "}
