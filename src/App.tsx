@@ -39,10 +39,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 
   static getDerivedStateFromError(error: unknown) {
     const raw = error instanceof Error ? String(error.message || "") : String(error ?? "");
-    if (/invalid url|failed to construct/i.test(raw)) {
-      return { message: "Connexion au programme PMU impossible pour le moment. Rechargez l'aperçu." };
-    }
-    return { message: raw || "L'aperçu a rencontré une erreur." };
+    return { message: raw || "L'application a rencontré une erreur." };
   }
 
   render() {

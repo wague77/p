@@ -2,6 +2,28 @@
   "requireApproval": true,
   "requests": [
     {
+      "id": "req_1791872750447_ds02m",
+      "projectId": "4c38ccb0-0a9a-410d-be43-25e97f033aa3",
+      "firstName": "Simplice",
+      "deviceId": "dev_1791872731074_ivnz530",
+      "status": "approved",
+      "createdAt": "2026-10-13T06:25:50.447Z",
+      "updatedAt": "2026-10-13T08:45:40.890Z",
+      "platform": "Mobile Android",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/30.0 Chrome/143.0.0.0 Mobile Safari/537.36"
+    },
+    {
+      "id": "req_1791839158102_8i8do",
+      "projectId": "4c38ccb0-0a9a-410d-be43-25e97f033aa3",
+      "firstName": "Paul",
+      "deviceId": "dev_1791798460205_hsjkde3",
+      "status": "approved",
+      "createdAt": "2026-10-12T21:05:58.102Z",
+      "updatedAt": "2026-10-13T08:45:38.232Z",
+      "platform": "Mobile Android",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36"
+    },
+    {
       "id": "req_1791794526959_s09xd",
       "projectId": "4c38ccb0-0a9a-410d-be43-25e97f033aa3",
       "firstName": "Ancienne app",
