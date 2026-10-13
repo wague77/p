@@ -17,8 +17,35 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
   const [range, setRange] = useState<TimeRange>("3m");
   const [activeTab, setActiveTab] = useState<"predictions" | "history">("predictions");
   const [loadingPast, setLoadingPast] = useState(false);
+  const [records, setRecords] = useState<RealQuinteRecord[]>(() => getRealQuinteHistory(range));
 
-  const records = useMemo(() => getRealQuinteHistory(range), [range]);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    async function loadLive() {
+      setLoadingPast(true);
+      try {
+        const fetched = await fetchAndPopulateRecentQuintes();
+        if (cancelled) return;
+        const filtered = filterRecordsByRange(fetched, range);
+        if (filtered.length > 0) {
+          setRecords(filtered);
+        } else {
+          setRecords(getRealQuinteHistory(range));
+        }
+      } catch {
+        if (!cancelled) {
+          setRecords(getRealQuinteHistory(range));
+        }
+      } finally {
+        if (!cancelled) setLoadingPast(false);
+      }
+    }
+    loadLive();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, range]);
   const stats = useMemo(() => calculateRealQuinteStats(records), [records]);
 
   const rawSelection = (Array.isArray(selection) ? selection : []).map(s => ({
@@ -111,6 +138,13 @@ export default function HistoryAnalysisModal({ isOpen, onClose, reunion, course,
             <History className="h-4 w-4" /> Historique & Arrivées Complètes ({records.length})
           </button>
         </div>
+
+        {loadingPast ? (
+          <div className="mb-4 flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-300 border border-amber-500/30">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Récupération et test des courses Quinté+ en direct via l'API PMU...</span>
+          </div>
+        ) : null}
 
         {activeTab === "predictions" ? (
           <div className="flex flex-col gap-5">
