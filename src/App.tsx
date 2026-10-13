@@ -47,7 +47,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
       return (
         <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-3 bg-[#04180f] px-6 text-center text-emerald-50">
           <AlertTriangle className="h-8 w-8 text-amber-300" />
-          <h1 className="text-xl font-black">Partants PMU</h1>
+          <h1 className="text-xl font-black">Partants Wague</h1>
           <p className="text-sm text-emerald-100/80">{this.state.message}</p>
           <button
             type="button"
@@ -63,11 +63,15 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
+import ApprovalGate from "./components/ApprovalGate";
+
 export default function App() {
   return (
     <AppErrorBoundary>
       <HashNav>
-        <Shell />
+        <ApprovalGate>
+          <Shell />
+        </ApprovalGate>
       </HashNav>
     </AppErrorBoundary>
   );
@@ -112,7 +116,7 @@ function Shell() {
         if (cancelled) return;
         setReunions([]);
         const raw = err instanceof Error ? String(err.message ?? "") : String(err ?? "");
-        setError(raw || "Impossible de joindre le programme PMU. Vérifiez la connexion puis actualisez.");
+        setError(raw || "Impossible de joindre le programme Wague. Vérifiez la connexion puis actualisez.");
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -263,7 +263,7 @@ function cleanApiPath(path: string): string {
     .split("?")[0]
     .split("#")[0];
   if (!/^\d{8}(?:\/R\d+\/C\d+\/[a-z0-9-]+)?$/i.test(clean)) {
-    throw new Error("Adresse PMU invalide. Actualisez le programme.");
+    throw new Error("Adresse Wague invalide. Actualisez le programme.");
   }
   return clean;
 }
@@ -289,7 +289,7 @@ function readableError(err: unknown, fallback: string): string {
   const message = err instanceof Error ? String(err.message ?? "") : String(err ?? "");
   const low = message.toLowerCase();
   if (low.indexOf("invalid url") >= 0 || low.indexOf("failed to construct") >= 0) {
-    return "Connexion au service PMU impossible. Touchez Actualiser.";
+    return "Connexion au service Wague impossible. Touchez Actualiser.";
   }
   if (
     low.indexOf("failed to fetch") >= 0 ||
@@ -297,7 +297,7 @@ function readableError(err: unknown, fallback: string): string {
     low.indexOf("load failed") >= 0 ||
     low.indexOf("pas joignable") >= 0
   ) {
-    return "Le programme PMU n'est pas joignable pour le moment. Touchez Actualiser.";
+    return "Le programme Wague n'est pas joignable pour le moment. Touchez Actualiser.";
   }
   return message || fallback;
 }
@@ -312,14 +312,14 @@ async function readBody(res: Response): Promise<string> {
 
 function parsePayload<T>(text: string): T {
   const trimmed = String(text ?? "").trim();
-  if (!trimmed) throw new Error("Réponse vide du service PMU.");
+  if (!trimmed) throw new Error("Réponse vide du service Wague.");
   if (trimmed.charAt(0) !== "{" && trimmed.charAt(0) !== "[") {
-    throw new Error("Réponse PMU illisible. Réessayez.");
+    throw new Error("Réponse Wague illisible. Réessayez.");
   }
   try {
     return JSON.parse(trimmed) as T;
   } catch {
-    throw new Error("Réponse PMU illisible. Réessayez.");
+    throw new Error("Réponse Wague illisible. Réessayez.");
   }
 }
 
@@ -334,7 +334,7 @@ async function callJson<T>(
   const text = await readBody(res);
   if (!res || !res.ok) {
     const status = res && typeof res.status === "number" ? String(res.status) : "erreur";
-    throw new Error("Le service PMU a répondu " + status + ".");
+    throw new Error("Le service Wague a répondu " + status + ".");
   }
   return parsePayload<T>(text);
 }
@@ -354,7 +354,7 @@ async function requestJson<T>(path: string): Promise<T> {
   } catch (err) {
     errors.push(err instanceof Error ? String(err.message ?? "") : String(err ?? ""));
   }
-  throw new Error(readableError(errors.join(" "), "Le programme PMU n'est pas joignable. Réessayez."));
+  throw new Error(readableError(errors.join(" "), "Le programme Wague n'est pas joignable. Réessayez."));
 }
 
 function coursePath(date: Date, reunion: number, course: number, leaf: string): string {

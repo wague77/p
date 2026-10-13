@@ -351,7 +351,7 @@ function PronosticBlock({
     <section className="rounded-3xl border border-amber-500/25 bg-[#103c28] p-4">
       <div className="mb-3 flex items-center gap-2">
         <Star className="h-5 w-5 fill-amber-300 text-amber-300" />
-        <h3 className="text-lg font-black text-amber-50">Pronostic PMU</h3>
+        <h3 className="text-lg font-black text-amber-50">Pronostic Wague</h3>
       </div>
 
       {ranked.length === 0 ? (
@@ -383,7 +383,7 @@ function PronosticBlock({
       {commentaire ? (
         <p className="mt-4 rounded-2xl bg-[#062214]/80 p-3 text-sm leading-relaxed text-emerald-50">{commentaire}</p>
       ) : (
-        <p className="mt-4 text-sm text-emerald-200/60">Commentaire PMU non publié.</p>
+        <p className="mt-4 text-sm text-emerald-200/60">Commentaire Wague non publié.</p>
       )}
 
       <div className="mt-4">
@@ -391,7 +391,7 @@ function PronosticBlock({
         {gameList.length === 0 ? (
           <p className="text-sm text-emerald-100/70">Aucun jeu chiffré n'est proposé sur cette course.</p>
         ) : ranked.length === 0 ? (
-          <p className="text-sm text-emerald-100/70">Les combinaisons s'afficheront dès que la sélection PMU sera publiée.</p>
+          <p className="text-sm text-emerald-100/70">Les combinaisons s'afficheront dès que la sélection Wague sera publiée.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {gameList.map((jeu) => {

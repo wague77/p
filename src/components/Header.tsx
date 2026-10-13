@@ -21,9 +21,9 @@ export default function Header({ dateValue, date, loading, onDateChange, onRefre
           </div>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300/90">
-              Turf · Programme officiel
+              Turf · Programme Wague
             </p>
-            <h1 className="text-xl font-black leading-none text-amber-50">Partants PMU</h1>
+            <h1 className="text-xl font-black leading-none text-amber-50">Partants Wague</h1>
           </div>
         </div>
 

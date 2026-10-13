@@ -7,10 +7,10 @@ export default function AidePage() {
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 px-4 py-5 pb-8">
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Mode d'emploi</p>
-        <h1 className="text-2xl font-black text-white">Comment lire Partants PMU</h1>
+        <h1 className="text-2xl font-black text-white">Comment lire Partants Wague</h1>
         <p className="mt-1 text-sm leading-relaxed text-emerald-100/80">
           L'application affiche le programme, les partants et le pronostic publiés par l'API Turfinfo
-          PMU. Elle ne prend aucun pari.
+          Wague. Elle ne prend aucun pari.
         </p>
       </header>
 
@@ -22,7 +22,7 @@ export default function AidePage() {
         <ul className="flex flex-col gap-2 text-sm leading-relaxed text-emerald-50/90">
           <li>Choisissez la date, puis une réunion (R1 · Vincennes…) et une course (C1 · 16:23…).</li>
           <li>La fiche indique le nom, l'heure, la distance, la discipline et le nombre de partants.</li>
-          <li>Le bloc Pronostic PMU classe la sélection avec numéro, nom et cote probable.</li>
+          <li>Le bloc Pronostic Wague classe la sélection avec numéro, nom et cote probable.</li>
           <li>
             Chaque jeu proposé reçoit une combinaison construite avec les premiers de cette sélection :
             1 cheval en simple, 2 en couplé ou 2 sur 4, 3 en trio ou tiercé, 4 en super 4, quarté+ ou
@@ -50,7 +50,7 @@ export default function AidePage() {
         </div>
         <p className="text-sm leading-relaxed text-emerald-50/90">
           Programme, partants, pronostics et commentaires sont lus depuis le service public Turfinfo
-          PMU. Les cotes et sélections peuvent changer jusqu'au départ : utilisez Actualiser.
+          Wague. Les cotes et sélections peuvent changer jusqu'au départ : utilisez Actualiser.
         </p>
       </article>
 
