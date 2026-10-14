@@ -20,9 +20,10 @@ export default function AidePage() {
           <h2 className="font-bold text-white">Historique Quinté</h2>
         </div>
         <p className="text-sm leading-relaxed text-emerald-50/90">
-          L'onglet Historique ne lit que les courses de Quinté : pronostic et arrivée sur 1 mois, 3
-          mois ou 1 an. À partir de cet historique, il classe le prochain Quinté de la réunion en
-          favoris, outsiders et un tocard à glisser. Ce n'est pas une promesse de gain.
+          L'onglet Historique ne lit que les courses de Quinté. Chaque pronostic affiche le top 8
+          (numéro, nom et cote), pas seulement les cinq premiers, avec l'arrivée sur 1 mois, 3 mois ou
+          1 an. À partir de cet historique, il classe le prochain Quinté en favoris, outsiders et un
+          tocard à glisser. Ce n'est pas une promesse de gain.
         </p>
       </article>
 
