@@ -1,7 +1,7 @@
 {
-  "requireApproval": true,
-  "public": false,
-  "openAccess": false,
-  "loginRequired": true,
+  "requireApproval": false,
+  "public": true,
+  "openAccess": true,
+  "loginRequired": false,
   "requests": []
 }

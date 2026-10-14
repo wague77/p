@@ -8,6 +8,7 @@ function BootFallback({ message }: { message: string }) {
     <div
       style={{
         minHeight: "100vh",
+        margin: 0,
         background: "#04180f",
         color: "#ecfdf5",
         display: "flex",
@@ -43,8 +44,9 @@ function BootFallback({ message }: { message: string }) {
   );
 }
 
-const rootEl = document.getElementById("root");
-if (rootEl) {
+function start() {
+  const rootEl = document.getElementById("root");
+  if (!rootEl) return;
   const root = createRoot(rootEl);
   try {
     root.render(
@@ -56,4 +58,10 @@ if (rootEl) {
     const message = error instanceof Error ? String(error.message ?? "") : String(error ?? "");
     root.render(<BootFallback message={message || "Impossible d'ouvrir l'application."} />);
   }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", start);
+} else {
+  start();
 }
