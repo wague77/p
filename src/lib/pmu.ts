@@ -23,11 +23,10 @@ declare global {
         remove(c: string, id: string): Promise<void>;
       };
     };
-    __pmuCb?: (data: unknown) => void;
   }
 }
 
-const CACHE_KEY = "partants-pmu-cache-v2";
+const CACHE_KEY = "partants-pmu-cache-v3";
 
 function safeDate(input: Date | null | undefined): Date {
   if (input instanceof Date && !Number.isNaN(input.getTime())) return input;
@@ -123,11 +122,16 @@ export function paysLabel(reunion: Reunion | null | undefined): string {
 }
 
 export function cleanPariCode(code: string | undefined | null): string {
-  return String(code ?? "").replace(/^E_/i, "").replace(/_/g, " ").trim();
+  return String(code ?? "")
+    .replace(/^E_/i, "")
+    .replace(/_/g, " ")
+    .trim();
 }
 
 export function pariLabel(code: string | undefined | null): string {
-  const key = String(code ?? "").toUpperCase().replace(/\s+/g, "_");
+  const key = String(code ?? "")
+    .toUpperCase()
+    .replace(/\s+/g, "_");
   const map: Record<string, string> = {
     SIMPLE_GAGNANT: "Simple gagnant",
     SIMPLE_PLACE: "Simple placé",
@@ -154,10 +158,13 @@ export function pariLabel(code: string | undefined | null): string {
 }
 
 export function horsesForPari(code: string | undefined | null): number {
-  const key = String(code ?? "").toUpperCase().replace(/\s+/g, "_");
+  const key = String(code ?? "")
+    .toUpperCase()
+    .replace(/\s+/g, "_");
   if (!key) return 0;
   if (key.indexOf("SIMPLE_GAGNANT") >= 0 || key.indexOf("SIMPLE_PLACE") >= 0) return 1;
-  if (key.indexOf("COUPLE") >= 0 || key.indexOf("COUPL") >= 0 || key.indexOf("DEUX_SUR_QUATRE") >= 0 || key.indexOf("2SUR4") >= 0) return 2;
+  if (key.indexOf("COUPLE") >= 0 || key.indexOf("COUPL") >= 0 || key.indexOf("DEUX_SUR_QUATRE") >= 0 || key.indexOf("2SUR4") >= 0)
+    return 2;
   if (key.indexOf("TRIO") >= 0 || key.indexOf("TIERC") >= 0) return 3;
   if (key.indexOf("SUPER") >= 0 || key.indexOf("QUARTE") >= 0 || key.indexOf("MULTI") >= 0) return 4;
   if (key.indexOf("QUINTE") >= 0 || key.indexOf("PICK5") >= 0 || key.indexOf("PICK_5") >= 0) return 5;
@@ -183,7 +190,13 @@ export function uniqueParis(paris: Pari[] | undefined | null): { code: string; l
 
 export function isNonPartant(p: Participant | null | undefined): boolean {
   const s = String(p?.statut ?? "").toUpperCase();
-  return s.indexOf("NON_PARTANT") >= 0 || s === "NP" || s.indexOf("NON PARTANT") >= 0 || s === "RETIRE" || s === "RETRAIT";
+  return (
+    s.indexOf("NON_PARTANT") >= 0 ||
+    s === "NP" ||
+    s.indexOf("NON PARTANT") >= 0 ||
+    s === "RETIRE" ||
+    s === "RETRAIT"
+  );
 }
 
 export function driverOf(p: Participant | null | undefined): string {
@@ -212,7 +225,8 @@ export function isCourseFinished(course: Course | null | undefined): boolean {
   if (!course) return false;
   if (course.arriveeDefinitive === true || course.isArriveeDefinitive === true) return true;
   const s = String(course.statut ?? "").toUpperCase();
-  if (s.indexOf("ARRIVEE") >= 0 || s.indexOf("FIN") >= 0 || s.indexOf("TERMIN") >= 0 || s.indexOf("OFFICIEL") >= 0) return true;
+  if (s.indexOf("ARRIVEE") >= 0 || s.indexOf("FIN") >= 0 || s.indexOf("TERMIN") >= 0 || s.indexOf("OFFICIEL") >= 0)
+    return true;
   return Array.isArray(course.ordreArrivee) && course.ordreArrivee.length > 0;
 }
 
@@ -231,7 +245,10 @@ export function finishOrder(participants: Participant[] | null | undefined): Arr
     .sort((a, b) => a.place - b.place || a.numPmu - b.numPmu);
 }
 
-export function arrivalFromCourse(course: Course | null | undefined, participants: Participant[] | null | undefined): ArriveeEntry[] {
+export function arrivalFromCourse(
+  course: Course | null | undefined,
+  participants: Participant[] | null | undefined
+): ArriveeEntry[] {
   const fromParts = finishOrder(participants);
   if (fromParts.length > 0) return fromParts;
   const raw = course?.ordreArrivee;
@@ -304,20 +321,15 @@ function officialUrls(path: string): string[] {
   return urls.filter((url, index) => urls.indexOf(url) === index);
 }
 
-function safeHttps(raw: string): string {
+function isHttpUrl(raw: string): boolean {
   const value = String(raw ?? "").trim();
-  if (value.indexOf("https://") !== 0) return "";
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" || !url.hostname || url.hostname.indexOf(".") < 0) return "";
-    return url.toString();
-  } catch {
-    return "";
-  }
+  return value.indexOf("https://") === 0 || value.indexOf("http://") === 0;
 }
 
 function sliceJson(text: string): string {
-  const raw = String(text ?? "").replace(/^\uFEFF/, "").trim();
+  const raw = String(text ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim();
   if (!raw) return "";
   if (raw.charAt(0) === "{" || raw.charAt(0) === "[") return raw;
   const obj = raw.indexOf("{");
@@ -338,6 +350,7 @@ function payloadScore(data: unknown): number {
   if (Array.isArray(data)) return data.length > 0 ? 3 : 1;
   const row = asRecord(data);
   if (!row) return 0;
+  if (row.offline === true && !row.programme && !row.reunions && !row.participants) return 0;
   if (row.error && !row.programme && !row.reunions && !row.participants && !row.selection && !row.commentaire) return 0;
   const reunions = extractReunions(row as ProgrammeResponse);
   if (reunions.length > 0) return 3;
@@ -377,11 +390,11 @@ function waitForNova(): Promise<void> {
   return new Promise((resolve) => {
     const started = Date.now();
     const timer = setInterval(() => {
-      if (typeof window.nova?.fetch === "function" || Date.now() - started > 1200) {
+      if (typeof window.nova?.fetch === "function" || Date.now() - started > 600) {
         clearInterval(timer);
         resolve();
       }
-    }, 80);
+    }, 60);
   });
 }
 
@@ -396,7 +409,7 @@ function callers(): Caller[] {
       list.push((input, init) => fn.call(nova, input, init));
     }
   } catch {
-    /* connecteur absent */
+    /* connecteur absent hors atelier */
   }
   try {
     if (typeof fetch === "function") list.push((input, init) => fetch(input, init));
@@ -430,8 +443,8 @@ async function readBody(res: unknown): Promise<string> {
 }
 
 async function readUrl<T>(caller: Caller, url: string): Promise<T | null> {
-  const target = safeHttps(url);
-  if (!target) return null;
+  const target = String(url ?? "").trim();
+  if (!isHttpUrl(target)) return null;
   try {
     const res = await caller(target, {
       method: "GET",
@@ -441,7 +454,7 @@ async function readUrl<T>(caller: Caller, url: string): Promise<T | null> {
     const status = Number((res as Response).status || 0);
     if (status >= 400) return null;
     const parsed = parseLoose<T>(await readBody(res));
-    return parsed && payloadScore(parsed) >= 3 ? parsed : parsed && payloadScore(parsed) > 0 ? parsed : null;
+    return parsed && payloadScore(parsed) > 0 ? parsed : null;
   } catch {
     return null;
   }
@@ -499,67 +512,25 @@ function firstStrong<T>(jobs: Array<() => Promise<T | null>>, budget: number): P
 }
 
 function proxyUrls(target: string): string[] {
-  const safe = safeHttps(target);
-  if (!safe) return [];
+  const safe = String(target ?? "").trim();
+  if (!isHttpUrl(safe)) return [];
   const encoded = encodeURIComponent(safe);
   return [
-    safeHttps("https://api.allorigins.win/raw?url=" + encoded),
-    safeHttps("https://api.allorigins.win/get?url=" + encoded),
-    safeHttps("https://corsproxy.io/?" + encoded),
-    safeHttps("https://api.codetabs.com/v1/proxy?quest=" + encoded),
-  ].filter(Boolean);
+    "https://api.allorigins.win/raw?url=" + encoded,
+    "https://api.allorigins.win/get?url=" + encoded,
+    "https://corsproxy.io/?" + encoded,
+  ];
 }
 
-function viaJsonp<T>(target: string): Promise<T | null> {
-  const safe = safeHttps(target);
-  if (!safe || typeof document === "undefined") return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const callback = "pmuCb" + String(Date.now()) + String(Math.floor(Math.random() * 1000));
-    const script = document.createElement("script");
-    let settled = false;
-    const finish = (value: T | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        delete (window as unknown as Record<string, unknown>)[callback];
-      } catch {
-        /* callback déjà retiré */
-      }
-      if (script.parentNode) script.parentNode.removeChild(script);
-      resolve(value);
-    };
-    const timer = setTimeout(() => finish(null), 7000);
-    (window as unknown as Record<string, unknown>)[callback] = (payload: unknown) => {
-      const data = unwrap(payload);
-      const parsed = payloadScore(data) > 0 ? (data as T) : parseLoose<T>(typeof payload === "string" ? payload : JSON.stringify(payload ?? ""));
-      finish(parsed);
-    };
-    script.onerror = () => finish(null);
-    const src = safeHttps("https://api.allorigins.win/get?url=" + encodeURIComponent(safe) + "&callback=" + callback);
-    if (!src) {
-      finish(null);
-      return;
-    }
-    script.src = src;
-    document.head.appendChild(script);
-  });
-}
-
-async function readRelativeApi<T>(path: string): Promise<T | null> {
-  if (typeof fetch !== "function") return null;
+function sameOriginApi(path: string): string {
   const clean = cleanPath(path);
-  if (!clean) return null;
+  if (!clean || typeof window === "undefined") return "";
   try {
-    const res = await fetch("/api/pmu?path=" + encodeURIComponent(clean), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-    if (!res || !res.ok) return null;
-    const parsed = parseLoose<T>(await res.text());
-    return parsed && payloadScore(parsed) > 0 ? parsed : null;
+    const loc = window.location;
+    if (!loc || loc.protocol === "file:" || !loc.origin || loc.origin === "null") return "";
+    return String(loc.origin).replace(/\/$/, "") + "/api/pmu?path=" + encodeURIComponent(clean);
   } catch {
-    return null;
+    return "";
   }
 }
 
@@ -596,28 +567,27 @@ async function requestJson<T>(path: string): Promise<T> {
   await waitForNova();
   const urls = officialUrls(clean);
   const active = callers();
-  const direct = urls.flatMap((url) => active.map((caller) => () => readUrl<T>(caller, url)));
-  const found = await firstStrong<T>(direct, 8000);
+  const primary = urls[0] || "";
+  const api = sameOriginApi(clean);
+  const jobs: Array<() => Promise<T | null>> = [];
+  for (const url of urls) {
+    for (const caller of active) jobs.push(() => readUrl<T>(caller, url));
+  }
+  if (api) {
+    for (const caller of active) jobs.push(() => readUrl<T>(caller, api));
+  }
+  for (const mirror of proxyUrls(primary)) {
+    for (const caller of active) jobs.push(() => readUrl<T>(caller, mirror));
+  }
+  const found = await firstStrong<T>(jobs, 12000);
   if (found && payloadScore(found) >= 3) {
     remember(clean, found);
     return found;
   }
-  const primary = urls[0] || "";
-  const proxies = proxyUrls(primary).flatMap((url) => active.map((caller) => () => readUrl<T>(caller, url)));
-  const extra: Array<() => Promise<T | null>> = [
-    ...proxies,
-    () => viaJsonp<T>(primary),
-    () => readRelativeApi<T>(clean),
-  ];
-  const second = await firstStrong<T>(extra, 8000);
-  const best = (second && payloadScore(second) >= payloadScore(found) ? second : found) || second;
-  if (best && payloadScore(best) > 0) {
-    if (payloadScore(best) >= 3) remember(clean, best);
-    return best;
-  }
+  if (found && payloadScore(found) > 0) return found;
   const cached = recall<T>(clean);
   if (cached) return cached;
-  throw new Error("Le programme PMU ne répond pas. Touchez Réessayer.");
+  throw new Error("Le programme PMU ne répond pas depuis cet appareil. Touchez Réessayer.");
 }
 
 function coursePath(date: Date, reunion: number, course: number, leaf: string): string {

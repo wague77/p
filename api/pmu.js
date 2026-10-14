@@ -1,4 +1,4 @@
-const BASES = [
+const HOSTS = [
   "https://offline.turfinfo.api.pmu.fr/rest/client/7/programme/",
   "https://online.turfinfo.api.pmu.fr/rest/client/7/programme/",
   "https://online.turfinfo.api.pmu.fr/rest/client/61/programme/",
@@ -16,12 +16,17 @@ function allowedPath(raw) {
 }
 
 function readQuery(req) {
-  const q = req && req.query ? req.query.path : "";
-  if (Array.isArray(q)) return String(q[0] || "");
-  if (q) return String(q);
+  try {
+    const q = req && req.query ? req.query.path : "";
+    if (Array.isArray(q)) return String(q[0] || "");
+    if (q) return String(q);
+  } catch {
+    /* query absente */
+  }
   try {
     const raw = String((req && req.url) || "/");
-    const url = new URL(raw.indexOf("http") === 0 ? raw : "https://partants.local" + (raw.charAt(0) === "/" ? raw : "/" + raw));
+    const withHost = raw.indexOf("http") === 0 ? raw : "https://partants.local" + (raw.charAt(0) === "/" ? raw : "/" + raw);
+    const url = new URL(withHost);
     return String(url.searchParams.get("path") || "");
   } catch {
     return "";
@@ -49,7 +54,8 @@ function looksUseful(text) {
     json.indexOf("reunions") < 0 &&
     json.indexOf("participants") < 0 &&
     json.indexOf("selection") < 0 &&
-    json.indexOf("commentaire") < 0
+    json.indexOf("commentaire") < 0 &&
+    json.indexOf("hippodrome") < 0
   ) {
     return "";
   }
@@ -60,7 +66,7 @@ async function pull(url) {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = setTimeout(() => {
     if (ctrl) ctrl.abort();
-  }, 7000);
+  }, 8000);
   try {
     const upstream = await fetch(url, {
       method: "GET",
@@ -69,11 +75,13 @@ async function pull(url) {
       headers: {
         Accept: "application/json, text/plain, */*",
         "Accept-Language": "fr-FR,fr;q=0.9",
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36",
         Referer: "https://www.pmu.fr/",
+        Origin: "https://www.pmu.fr",
       },
     });
-    if (!upstream || (typeof upstream.ok === "boolean" && !upstream.ok)) return "";
+    const status = Number(upstream && upstream.status);
+    if (!upstream || status >= 400) return "";
     return looksUseful(await upstream.text());
   } catch {
     return "";
@@ -86,8 +94,8 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "*");
-  res.setHeader("Cache-Control", "public, max-age=60");
-  if (req.method === "OPTIONS") {
+  res.setHeader("Cache-Control", "public, max-age=45");
+  if (req && req.method === "OPTIONS") {
     res.status(204).end();
     return;
   }
@@ -96,9 +104,11 @@ export default async function handler(req, res) {
     res.status(400).json({ error: "Chemin PMU refusé." });
     return;
   }
-  const targets = BASES.map((base) => base + path);
+  const targets = HOSTS.map((base) => base + path);
   if (path.indexOf("/") < 0) {
-    targets.push("https://online.turfinfo.api.pmu.fr/rest/client/1/programme/" + path + "?specialisation=INTERNET");
+    targets.push(
+      "https://online.turfinfo.api.pmu.fr/rest/client/1/programme/" + path + "?specialisation=INTERNET"
+    );
   }
   for (const target of targets) {
     const json = await pull(target);
@@ -123,5 +133,5 @@ export default async function handler(req, res) {
       return;
     }
   }
-  res.status(200).json({ reunions: [], programme: { reunions: [] }, error: "vide" });
+  res.status(200).json({ reunions: [], programme: { reunions: [] }, offline: true });
 }
