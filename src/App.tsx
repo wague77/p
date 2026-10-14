@@ -34,6 +34,22 @@ function readSelection(): Selection {
   }
 }
 
+function raceTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(label)), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { message: string }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
@@ -48,7 +64,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   render() {
     if (this.state.message) {
       return (
-        <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-3 bg-[#04180f] px-6 text-center text-emerald-50">
+        <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-3 bg-[#04180f] px-6 pb-28 text-center text-emerald-50">
           <AlertTriangle className="h-8 w-8 text-amber-300" />
           <h1 className="text-xl font-black">Partants PMU</h1>
           <p className="text-sm text-emerald-100/80">{this.state.message}</p>
@@ -59,6 +75,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
           >
             Recharger
           </button>
+          <NavBar />
         </div>
       );
     }
@@ -78,7 +95,14 @@ export default function App() {
 
 function Gate() {
   const { path } = useNav();
-  if (String(path || "") === "/admin") return <AdminPage />;
+  if (String(path || "") === "/admin") {
+    return (
+      <div className="min-h-screen bg-[#04180f] pb-24 text-emerald-50">
+        <AdminPage />
+        <NavBar />
+      </div>
+    );
+  }
   return (
     <ApprovalGate>
       <Shell />
@@ -118,14 +142,18 @@ function Shell() {
       setLoading(true);
       setError("");
       try {
-        const list = await fetchProgramme(date);
+        const list = await raceTimeout(
+          fetchProgramme(date),
+          9000,
+          "Le programme PMU ne répond pas. Touchez Réessayer."
+        );
         if (cancelled) return;
         setReunions(Array.isArray(list) ? list : []);
       } catch (err) {
         if (cancelled) return;
         setReunions([]);
         const raw = err instanceof Error ? String(err.message ?? "") : String(err ?? "");
-        setError(raw || "Impossible de joindre le programme PMU. Vérifiez la connexion puis actualisez.");
+        setError(raw || "Impossible de joindre le programme PMU. Touchez Réessayer.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -144,7 +172,7 @@ function Shell() {
 
   return (
     <div className="min-h-screen bg-[#04180f] text-emerald-50">
-      <div className="pb-20">
+      <div className="pb-28">
         <AppRoutes
           routes={[
             {

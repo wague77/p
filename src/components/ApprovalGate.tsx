@@ -1,20 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { Clock3, Lock, ShieldCheck, ShieldX } from "lucide-react";
-import {
-  findOwnRequest,
-  statusLabel,
-  submitRequest,
-  type AccessRequest,
-} from "../lib/approval";
+import { Clock3, ShieldCheck, ShieldX } from "lucide-react";
+import { findOwnRequest, statusLabel, submitRequest, type AccessRequest } from "../lib/approval";
 import type { DbRow } from "../lib/db";
-import { useNav } from "../lib/nav";
+import NavBar from "./NavBar";
 
 interface Props {
   children: React.ReactNode;
 }
 
 export default function ApprovalGate({ children }: Props) {
-  const { navigate } = useNav();
   const [loading, setLoading] = useState(true);
   const [row, setRow] = useState<DbRow<AccessRequest> | null>(null);
   const [name, setName] = useState("");
@@ -64,7 +58,7 @@ export default function ApprovalGate({ children }: Props) {
 
   return (
     <div className="min-h-screen bg-[#04180f] text-emerald-50">
-      <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 px-4 py-8 pb-24">
+      <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 px-4 py-8 pb-28">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-xl font-black text-[#062214]">
             P
@@ -76,7 +70,7 @@ export default function ApprovalGate({ children }: Props) {
         </div>
         <p className="text-sm leading-relaxed text-emerald-100/85">
           Partants PMU n'est pas ouvert sans accord. Envoyez une demande : l'application reste fermée
-          tant qu'un admin ne l'a pas approuvée.
+          tant qu'un admin ne l'a pas approuvée. L'onglet Admin reste accessible en bas.
         </p>
 
         {loading ? (
@@ -157,15 +151,7 @@ export default function ApprovalGate({ children }: Props) {
           <ShieldCheck className="h-4 w-4" /> Actualiser le statut
         </button>
       </div>
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-amber-500/20 bg-[#04180f]/95">
-        <button
-          type="button"
-          onClick={() => navigate("/admin")}
-          className="mx-auto flex min-h-[56px] w-full max-w-5xl items-center justify-center gap-2 text-sm font-semibold text-amber-300"
-        >
-          <Lock className="h-4 w-4" /> Espace admin
-        </button>
-      </nav>
+      <NavBar />
     </div>
   );
 }

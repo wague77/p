@@ -1,5 +1,5 @@
 import React from "react";
-import { Flag, Heart, History, Info, ListOrdered } from "lucide-react";
+import { Flag, Heart, History, Info, ListOrdered, Lock } from "lucide-react";
 import { NavLink } from "../lib/nav";
 
 const links = [
@@ -8,12 +8,13 @@ const links = [
   { to: "/historique", label: "Historique", icon: History, end: false },
   { to: "/favoris", label: "Favoris", icon: Heart, end: false },
   { to: "/aide", label: "Aide", icon: Info, end: false },
+  { to: "/admin", label: "Admin", icon: Lock, end: false },
 ];
 
 export default function NavBar() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-amber-500/20 bg-[#04180f]/95 backdrop-blur-md">
-      <div className="mx-auto grid max-w-5xl grid-cols-5">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-amber-500/30 bg-[#04180f] pb-[env(safe-area-inset-bottom)]">
+      <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-2 py-1">
         {links.map((link) => {
           const Icon = link.icon;
           return (
@@ -22,13 +23,13 @@ export default function NavBar() {
               to={link.to}
               end={link.end}
               className={(isActive) =>
-                `flex min-h-[56px] flex-col items-center justify-center gap-1 text-[11px] font-semibold ${
-                  isActive ? "text-amber-300" : "text-emerald-200/70"
+                `flex min-h-14 min-w-[72px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[11px] font-bold ${
+                  isActive ? "bg-amber-400 text-[#062214]" : "text-emerald-50"
                 }`
               }
             >
-              <Icon className="h-5 w-5" />
-              {link.label}
+              <Icon className="h-5 w-5 shrink-0" />
+              <span className="whitespace-nowrap">{link.label}</span>
             </NavLink>
           );
         })}
