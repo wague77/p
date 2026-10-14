@@ -78,7 +78,7 @@ export default function App() {
 
 function Gate() {
   const { path } = useNav();
-  if (path === "/admin") return <AdminPage />;
+  if (String(path || "") === "/admin") return <AdminPage />;
   return (
     <ApprovalGate>
       <Shell />

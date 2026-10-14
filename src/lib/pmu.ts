@@ -34,7 +34,7 @@ function safeDate(input: Date | null | undefined): Date {
   return new Date();
 }
 
-export function formatDateJJMMAAAA(date: Date): string {
+export function formatDateJJMMAAAA(date: Date | null | undefined): string {
   const d = safeDate(date);
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -55,7 +55,7 @@ export function parseInputDate(value: string | null | undefined): Date {
   return parsed;
 }
 
-export function toInputDate(date: Date): string {
+export function toInputDate(date: Date | null | undefined): string {
   const d = safeDate(date);
   const yyyy = String(d.getFullYear());
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -63,7 +63,7 @@ export function toInputDate(date: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function formatLongDate(date: Date): string {
+export function formatLongDate(date: Date | null | undefined): string {
   try {
     return safeDate(date).toLocaleDateString("fr-FR", {
       weekday: "long",
@@ -87,7 +87,7 @@ export function formatHeure(value: number | string | undefined | null): string {
       }
     }
     const colon = text.indexOf(":");
-    if (colon > 0) return text.slice(0, 5);
+    if (colon > 0) return text.slice(Math.max(0, colon - 2), colon + 3);
     const n = Number(text);
     if (!Number.isFinite(n)) return text || "—";
     return formatHeure(n);
@@ -274,7 +274,9 @@ export function isCourseFinished(course: Course | null | undefined): boolean {
   ) {
     return true;
   }
-  return Array.isArray(course.ordreArrivee) && course.ordreArrivee.length > 0;
+  const raw = course.ordreArrivee;
+  if (Array.isArray(raw) && raw.length > 0) return true;
+  return false;
 }
 
 export function finishOrder(participants: Participant[] | null | undefined): ArriveeEntry[] {
@@ -289,12 +291,10 @@ export function finishOrder(participants: Participant[] | null | undefined): Arr
         statut: String(p?.statut || p?.incident || ""),
         ecart: "",
         rapport: p?.dernierRapportDirect?.rapport ?? p?.rapportDirect,
-        participant: p,
       };
     })
     .filter((row) => Number.isFinite(row.place) && row.place > 0)
-    .sort((a, b) => a.place - b.place || a.numPmu - b.numPmu)
-    .map(({ participant: _ignored, ...row }) => row);
+    .sort((a, b) => a.place - b.place || a.numPmu - b.numPmu);
 }
 
 export function arrivalFromCourse(
@@ -314,18 +314,19 @@ export function arrivalFromCourse(
   }
   return raw
     .map((item, index) => {
-      if (typeof item === "number") {
-        const horse = byNum.get(item);
+      if (typeof item === "number" || typeof item === "string") {
+        const num = Number(item) || 0;
+        const horse = byNum.get(num);
         return {
           place: index + 1,
-          numPmu: item,
+          numPmu: num,
           nom: String(horse?.nom || ""),
           statut: "",
           ecart: "",
           rapport: horse?.dernierRapportDirect?.rapport,
         };
       }
-      const row = item as ArriveeOfficielle;
+      const row = (item || {}) as ArriveeOfficielle;
       const num = Number(row?.numPmu ?? row?.numero) || 0;
       const horse = byNum.get(num);
       return {
@@ -345,7 +346,7 @@ export function arrivalPreview(entries: ArriveeEntry[] | null | undefined, max =
   if (!Array.isArray(entries) || entries.length === 0) return "";
   return entries
     .slice(0, max)
-    .map((row) => String(row.numPmu || "–"))
+    .map((row) => String(row?.numPmu || "–"))
     .join(" - ");
 }
 
@@ -355,23 +356,50 @@ function extractReunions(payload: ProgrammeResponse | Reunion[] | null | undefin
   return Array.isArray(list) ? list : [];
 }
 
-export function pmuUrl(path: string): string {
+export function buildPmuUrl(path: string): string {
   const clean = String(path ?? "")
     .replace(/^\/+/, "")
     .split("?")[0]
     .split("#")[0]
     .trim();
   if (!/^\d{8}(?:\/R\d+\/C\d+\/[a-z0-9-]+)?$/i.test(clean)) {
-    throw new Error("Adresse PMU invalide. Actualisez le programme.");
+    return "";
   }
   return PMU_ORIGIN + PMU_PREFIX + clean;
 }
 
+function isAbsoluteHttp(value: string): boolean {
+  const text = String(value ?? "");
+  return text.indexOf("https://") === 0 || text.indexOf("http://") === 0;
+}
+
 function novaFetchFn(): ((input: string, init?: RequestInit) => Promise<Response>) | null {
   try {
-    const fn = window.nova && window.nova.fetch;
+    const nova = typeof window !== "undefined" ? window.nova : undefined;
+    const fn = nova && nova.fetch;
     if (typeof fn !== "function") return null;
-    return fn.bind(window.nova);
+    return function novaBound(input: string, init?: RequestInit) {
+      const target = String(input ?? "");
+      if (!isAbsoluteHttp(target)) {
+        return Promise.reject(new Error("Adresse PMU invalide."));
+      }
+      return fn.call(nova, target, init);
+    };
+  } catch {
+    return null;
+  }
+}
+
+function directFetch(): ((input: string, init?: RequestInit) => Promise<Response>) | null {
+  try {
+    if (typeof fetch !== "function") return null;
+    return function direct(input: string, init?: RequestInit) {
+      const target = String(input ?? "");
+      if (!isAbsoluteHttp(target)) {
+        return Promise.reject(new Error("Adresse PMU invalide."));
+      }
+      return fetch(target, init);
+    };
   } catch {
     return null;
   }
@@ -383,12 +411,18 @@ function readableError(err: unknown, fallback: string): string {
   if (
     low.indexOf("invalid url") >= 0 ||
     low.indexOf("failed to construct") >= 0 ||
+    low.indexOf("failed to parse url") >= 0
+  ) {
+    return "Le programme PMU n'a pas pu être contacté. Touchez Actualiser.";
+  }
+  if (
     low.indexOf("failed to fetch") >= 0 ||
     low.indexOf("network") >= 0 ||
     low.indexOf("load failed") >= 0 ||
-    low.indexOf("cors") >= 0
+    low.indexOf("cors") >= 0 ||
+    low.indexOf("not allowed") >= 0
   ) {
-    return "Le programme PMU n'est pas joignable depuis cet écran. Touchez Actualiser, ou ouvrez l'application dans l'atelier NOVA.";
+    return "Le programme PMU n'est pas joignable depuis ce lien. Ouvrez l'application dans l'atelier NOVA, ou réessayez.";
   }
   return message || fallback;
 }
@@ -419,7 +453,7 @@ async function callJson<T>(
   href: string
 ): Promise<T> {
   const target = String(href ?? "");
-  if (target.indexOf("https://") !== 0) {
+  if (!isAbsoluteHttp(target) || target.indexOf(PMU_ORIGIN + PMU_PREFIX) !== 0) {
     throw new Error("Adresse PMU invalide. Actualisez le programme.");
   }
   const res = await requester(target, {
@@ -435,18 +469,27 @@ async function callJson<T>(
 }
 
 async function requestJson<T>(path: string): Promise<T> {
-  const href = pmuUrl(path);
+  const href = buildPmuUrl(path);
+  if (!href) {
+    throw new Error("Adresse PMU invalide. Actualisez le programme.");
+  }
+  const callers: Array<(input: string, init?: RequestInit) => Promise<Response>> = [];
   const viaNova = novaFetchFn();
-  if (!viaNova) {
-    throw new Error(
-      "Le programme PMU n'est pas joignable depuis ce lien. Ouvrez l'application dans l'atelier NOVA, ou réessayez."
-    );
+  const viaDirect = directFetch();
+  if (viaNova) callers.push(viaNova);
+  if (viaDirect) callers.push(viaDirect);
+  if (callers.length === 0) {
+    throw new Error("Connexion indisponible dans cet aperçu. Rechargez la page.");
   }
-  try {
-    return await callJson<T>(viaNova, href);
-  } catch (err) {
-    throw new Error(readableError(err, "Le programme PMU n'est pas joignable. Réessayez."));
+  let last = "Le programme PMU n'est pas joignable. Réessayez.";
+  for (const caller of callers) {
+    try {
+      return await callJson<T>(caller, href);
+    } catch (err) {
+      last = readableError(err, last);
+    }
   }
+  throw new Error(last);
 }
 
 function coursePath(date: Date, reunion: number, course: number, leaf: string): string {
@@ -455,7 +498,7 @@ function coursePath(date: Date, reunion: number, course: number, leaf: string): 
   const c = Math.trunc(Number(course));
   const safeLeaf = String(leaf ?? "").replace(/[^a-z0-9-]/gi, "");
   if (!Number.isFinite(r) || !Number.isFinite(c) || r <= 0 || c <= 0 || !safeLeaf) {
-    throw new Error("Numéro de réunion ou de course invalide.");
+    return "";
   }
   return stamp + "/R" + String(r) + "/C" + String(c) + "/" + safeLeaf;
 }
@@ -475,17 +518,17 @@ export async function fetchProgramme(date: Date): Promise<Reunion[]> {
 }
 
 export async function fetchParticipants(date: Date, reunion: number, course: number): Promise<Participant[]> {
-  const data = await requestJson<ParticipantsResponse | Participant[]>(
-    coursePath(date, reunion, course, "participants")
-  );
+  const path = coursePath(date, reunion, course, "participants");
+  if (!path) return [];
+  const data = await requestJson<ParticipantsResponse | Participant[]>(path);
   const list = Array.isArray(data) ? data : data?.participants || [];
   return Array.isArray(list) ? list : [];
 }
 
 export async function fetchPronostics(date: Date, reunion: number, course: number): Promise<SelectionItem[]> {
-  const data = await requestJson<PronosticsResponse | SelectionItem[]>(
-    coursePath(date, reunion, course, "pronostics")
-  );
+  const path = coursePath(date, reunion, course, "pronostics");
+  if (!path) return [];
+  const data = await requestJson<PronosticsResponse | SelectionItem[]>(path);
   const list = Array.isArray(data) ? data : data?.selection || [];
   return Array.isArray(list)
     ? [...list].sort((a, b) => (Number(a?.rang) || 99) - (Number(b?.rang) || 99))
@@ -493,9 +536,9 @@ export async function fetchPronostics(date: Date, reunion: number, course: numbe
 }
 
 export async function fetchCommentaire(date: Date, reunion: number, course: number): Promise<string> {
-  const data = await requestJson<PronosticsDetaillesResponse>(
-    coursePath(date, reunion, course, "pronostics-detailles")
-  );
+  const path = coursePath(date, reunion, course, "pronostics-detailles");
+  if (!path) return "";
+  const data = await requestJson<PronosticsDetaillesResponse>(path);
   if (!data) return "";
   if (typeof data.commentaire === "string") return String(data.commentaire);
   return String(data.commentaire?.texte || "");
