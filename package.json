@@ -1,8 +1,10 @@
 {
   "name": "partants-pmu",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
+  "description": "Partants PMU",
+  "displayName": "Partants PMU",
   "scripts": {
     "dev": "vite",
     "build": "node build.mjs",

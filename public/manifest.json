@@ -1,0 +1,12 @@
+{
+  "id": "fr.partantspmu.app",
+  "name": "Partants PMU",
+  "short_name": "Partants",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#04180f",
+  "theme_color": "#04180f",
+  "lang": "fr",
+  "icons": []
+}

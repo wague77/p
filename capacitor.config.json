@@ -1,0 +1,21 @@
+{
+  "appId": "fr.partantspmu.app",
+  "appName": "Partants PMU",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "cleartext": false,
+    "allowNavigation": [
+      "offline.turfinfo.api.pmu.fr",
+      "online.turfinfo.api.pmu.fr",
+      "api.allorigins.win",
+      "corsproxy.io"
+    ]
+  }
+}

@@ -8,12 +8,26 @@ const assets = join(dist, "assets");
 
 function walkJs(dir, acc) {
   if (!existsSync(dir)) return acc;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  let entries = [];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return acc;
+  }
+  for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) walkJs(full, acc);
-    else if (String(entry.name).endsWith(".js")) acc.push(full);
+    else if (String(entry.name).toLowerCase().endsWith(".js")) acc.push(full);
   }
   return acc;
+}
+
+function safeSize(file) {
+  try {
+    return statSync(file).size;
+  } catch {
+    return 0;
+  }
 }
 
 async function build() {
@@ -41,23 +55,8 @@ async function build() {
   try {
     await vite.build({
       root,
-      configFile: false,
+      configFile: join(root, "vite.config.ts"),
       base: "./",
-      plugins: [reactPlugin()],
-      build: {
-        outDir: dist,
-        emptyOutDir: false,
-        assetsDir: "assets",
-        cssCodeSplit: false,
-        rollupOptions: {
-          output: {
-            format: "es",
-            inlineDynamicImports: true,
-            entryFileNames: "assets/index.js",
-            assetFileNames: "assets/index[extname]",
-          },
-        },
-      },
     });
   } catch (error) {
     console.error("ERREUR : le build Vite a échoué.");
@@ -66,32 +65,28 @@ async function build() {
   }
 
   if (!existsSync(assets)) mkdirSync(assets, { recursive: true });
-  const jsPaths = walkJs(dist, []).filter((file) => statSync(file).size > 500);
-  const entry = jsPaths.find((file) => file.endsWith(join("assets", "index.js"))) || jsPaths[0];
+  const jsPaths = walkJs(dist, []).filter((file) => safeSize(file) > 200);
+  const entry = jsPaths.find((file) => file.split(/[/\\\\]/).pop() === "index.js") || jsPaths.sort((a, b) => safeSize(b) - safeSize(a))[0];
   if (!entry) {
     console.error("ERREUR : aucun fichier JavaScript dans dist/assets — interface absente.");
     process.exit(1);
   }
   const indexJs = join(assets, "index.js");
-  if (entry !== indexJs) {
-    writeFileSync(indexJs, readFileSync(entry));
-  }
-  if (!existsSync(indexJs) || statSync(indexJs).size < 500) {
+  if (entry !== indexJs) writeFileSync(indexJs, readFileSync(entry));
+  if (safeSize(indexJs) < 200) {
     console.error("ERREUR : aucun fichier JavaScript dans dist/assets — interface absente.");
     process.exit(1);
   }
 
-  const cssName = existsSync(assets)
-    ? readdirSync(assets).find((name) => name.endsWith(".css"))
-    : "";
+  const cssName = existsSync(assets) ? readdirSync(assets).find((name) => name.endsWith(".css")) || "" : "";
   const cssLink = cssName ? `    <link rel="stylesheet" href="./assets/${cssName}" />\n` : "";
-
   const html = `<!DOCTYPE html>
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#04180f" />
     <title>Partants PMU</title>
     <style>
       html, body, #root { min-height: 100%; background: #04180f; color: #ecfdf5; }
@@ -109,7 +104,7 @@ ${cssLink}  </head>
   const pub = join(root, "public");
   if (existsSync(pub)) {
     for (const name of readdirSync(pub)) {
-      if (name === "index.html") continue;
+      if (name === "index.html" || name === "assets") continue;
       const from = join(pub, name);
       const to = join(dist, name);
       if (!existsSync(to)) cpSync(from, to, { recursive: true });
@@ -117,12 +112,11 @@ ${cssLink}  </head>
   }
 
   const indexHtml = readFileSync(join(dist, "index.html"), "utf8");
-  const jsOk = existsSync(indexJs) && statSync(indexJs).size > 500;
-  if (!jsOk || indexHtml.indexOf("./assets/index.js") < 0 || indexHtml.indexOf("<script") < 0) {
+  if (safeSize(indexJs) < 200 || indexHtml.indexOf("./assets/index.js") < 0) {
     console.error("ERREUR : aucun fichier JavaScript dans dist/assets — interface absente.");
     process.exit(1);
   }
-  console.log("Partants PMU : page autonome prête dans dist/ (index.js, " + statSync(indexJs).size + " octets)");
+  console.log("Partants PMU : page autonome prête dans dist/ (index.js, " + safeSize(indexJs) + " octets)");
 }
 
 build();
