@@ -1,12 +1,12 @@
 import React from "react";
-import { Flag, Heart, Info, ListOrdered, ShieldCheck } from "lucide-react";
+import { Flag, Heart, History, Info, ListOrdered } from "lucide-react";
 import { NavLink } from "../lib/nav";
 
 const links = [
   { to: "/", label: "Programme", icon: Flag, end: true },
   { to: "/partants", label: "Partants", icon: ListOrdered, end: false },
+  { to: "/historique", label: "Historique", icon: History, end: false },
   { to: "/favoris", label: "Favoris", icon: Heart, end: false },
-  { to: "/approbations", label: "Accès", icon: ShieldCheck, end: false },
   { to: "/aide", label: "Aide", icon: Info, end: false },
 ];
 

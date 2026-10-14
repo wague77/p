@@ -1,20 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ChevronRight, MapPin } from "lucide-react";
+import ArriveeBlock from "../components/ArriveeBlock";
 import Header from "../components/Header";
 import ResponsiblePlay from "../components/ResponsiblePlay";
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "../components/StatusMessage";
 import { useNav } from "../lib/nav";
 import {
+  arrivalFromCourse,
   courseCount,
   disciplineLabel,
+  fetchParticipants,
   formatHeure,
   hippodromeLabel,
+  isCourseFinished,
   parseInputDate,
   paysLabel,
   toInputDate,
   uniqueParis,
 } from "../lib/pmu";
-import type { Course, Reunion } from "../lib/types";
+import type { ArriveeEntry, Course, Participant, Reunion } from "../lib/types";
 
 const DATE_KEY = "partants-pmu-date";
 
@@ -64,6 +68,7 @@ export default function ProgrammePage({
   const { navigate } = useNav();
   const list = Array.isArray(reunions) ? reunions : [];
   const [selectedR, setSelectedR] = useState<number | null>(null);
+  const [arrivals, setArrivals] = useState<Record<string, ArriveeEntry[]>>({});
   const date = useMemo(() => parseInputDate(dateValue), [dateValue]);
 
   useEffect(() => {
@@ -78,6 +83,37 @@ export default function ProgrammePage({
   const reunion = list.find((r) => Number(r?.numOfficiel) === selectedR) || list[0];
   const courses = Array.isArray(reunion?.courses) ? reunion.courses : [];
   const total = courseCount(list);
+
+  useEffect(() => {
+    let cancelled = false;
+    const rNum = Number(reunion?.numOfficiel);
+    const finished = courses.filter((c) => isCourseFinished(c) && Number(c?.numOrdre) > 0);
+    if (!rNum || finished.length === 0) return undefined;
+    async function loadArrivals() {
+      const entries = await Promise.all(
+        finished.map(async (c) => {
+          const cNum = Number(c.numOrdre);
+          const key = `${dateValue}-${rNum}-${cNum}`;
+          try {
+            const parts = await fetchParticipants(date, rNum, cNum);
+            return [key, arrivalFromCourse(c, Array.isArray(parts) ? parts : [])] as const;
+          } catch {
+            return [key, arrivalFromCourse(c, [])] as const;
+          }
+        })
+      );
+      if (cancelled) return;
+      setArrivals((prev) => {
+        const next = { ...prev };
+        for (const [key, value] of entries) next[key] = value;
+        return next;
+      });
+    }
+    loadArrivals();
+    return () => {
+      cancelled = true;
+    };
+  }, [date, dateValue, reunion, courses]);
 
   function openCourse(course: Course) {
     const rNum = Number(reunion?.numOfficiel);
@@ -171,6 +207,7 @@ export default function ProgrammePage({
                     className="min-h-11 shrink-0 rounded-full border border-amber-500/40 bg-[#123d28] px-4 text-sm font-semibold text-amber-100"
                   >
                     C{String(c?.numOrdre ?? "")} · {formatHeure(c?.heureDepart)}
+                    {isCourseFinished(c) ? " · Arrivée" : ""}
                   </button>
                 ))}
               </div>
@@ -179,8 +216,11 @@ export default function ProgrammePage({
             <ul className="flex flex-col gap-3">
               {courses.map((c, index) => {
                 const jeux = uniqueParis(c?.paris);
+                const finished = isCourseFinished(c);
+                const key = `${dateValue}-${String(reunion?.numOfficiel ?? "")}-${String(c?.numOrdre ?? "")}`;
+                const arrival = arrivals[key] || arrivalFromCourse(c, [] as Participant[]);
                 return (
-                  <li key={`card-${String(c?.numOrdre ?? index)}`}>
+                  <li key={`card-${String(c?.numOrdre ?? index)}`} className="flex flex-col gap-2">
                     <button
                       type="button"
                       onClick={() => openCourse(c)}
@@ -190,8 +230,15 @@ export default function ProgrammePage({
                         {String(c?.numOrdre ?? "–")}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-base font-bold text-white">
-                          {String(c?.libelle || `Course ${String(c?.numOrdre ?? "")}`)}
+                        <span className="flex items-center gap-2">
+                          <span className="block truncate text-base font-bold text-white">
+                            {String(c?.libelle || `Course ${String(c?.numOrdre ?? "")}`)}
+                          </span>
+                          {finished ? (
+                            <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black uppercase text-[#062214]">
+                              Terminée
+                            </span>
+                          ) : null}
                         </span>
                         <span className="mt-1 block text-sm text-emerald-100/75">
                           {formatHeure(c?.heureDepart)} ·{" "}
@@ -213,6 +260,15 @@ export default function ProgrammePage({
                       </span>
                       <ChevronRight className="h-5 w-5 shrink-0 text-amber-300" />
                     </button>
+                    {finished ? (
+                      arrival.length > 0 ? (
+                        <ArriveeBlock entries={arrival} compact />
+                      ) : (
+                        <p className="rounded-2xl border border-dashed border-amber-500/30 px-3 py-2 text-sm text-amber-100/80">
+                          Course terminée. L'arrivée officielle n'est pas encore publiée.
+                        </p>
+                      )
+                    ) : null}
                   </li>
                 );
               })}

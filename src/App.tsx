@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import ApprovalGate from "./components/ApprovalGate";
 import NavBar from "./components/NavBar";
-import { AppRoutes, HashNav } from "./lib/nav";
+import { AppRoutes, HashNav, useNav } from "./lib/nav";
 import { fetchProgramme } from "./lib/pmu";
 import type { Reunion } from "./lib/types";
+import AdminPage from "./pages/AdminPage";
 import AidePage from "./pages/AidePage";
-import ApprobationsPage from "./pages/ApprobationsPage";
 import FavorisPage from "./pages/FavorisPage";
+import HistoriquePage from "./pages/HistoriquePage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PartantsPage from "./pages/PartantsPage";
 import ProgrammePage, { useProgrammeDate } from "./pages/ProgrammePage";
@@ -69,11 +70,19 @@ export default function App() {
   return (
     <AppErrorBoundary>
       <HashNav>
-        <ApprovalGate>
-          <Shell />
-        </ApprovalGate>
+        <Gate />
       </HashNav>
     </AppErrorBoundary>
+  );
+}
+
+function Gate() {
+  const { path } = useNav();
+  if (path === "/admin") return <AdminPage />;
+  return (
+    <ApprovalGate>
+      <Shell />
+    </ApprovalGate>
   );
 }
 
@@ -168,8 +177,13 @@ function Shell() {
                 />
               ),
             },
+            {
+              path: "/historique",
+              element: (
+                <HistoriquePage reunions={safeReunions} dateValue={dateValue} loadingProgramme={loading} />
+              ),
+            },
             { path: "/favoris", element: <FavorisPage onOpen={openFavorite} /> },
-            { path: "/approbations", element: <ApprobationsPage /> },
             { path: "/aide", element: <AidePage /> },
             { path: "*", element: <NotFoundPage /> },
           ]}

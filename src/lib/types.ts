@@ -9,6 +9,18 @@ export interface Pari {
   enVente?: boolean;
 }
 
+export interface ArriveeOfficielle {
+  position?: number;
+  numPmu?: number;
+  numero?: number;
+  nom?: string;
+  statut?: string;
+  temps?: string;
+  ecart?: string;
+  rapportDirect?: number;
+  rapport?: number;
+}
+
 export interface Course {
   numOrdre?: number;
   numExterne?: number;
@@ -23,6 +35,9 @@ export interface Course {
   parcours?: string;
   corde?: string;
   statut?: string;
+  arriveeDefinitive?: boolean;
+  isArriveeDefinitive?: boolean;
+  ordreArrivee?: Array<number | ArriveeOfficielle>;
   paris?: Pari[];
 }
 
@@ -66,7 +81,9 @@ export interface Participant {
   musique?: string;
   placeCorde?: number;
   ordreArrivee?: number;
+  positionArrivee?: number;
   dernierRapportDirect?: RapportDirect;
+  rapportDirect?: number;
   gainsCarriere?: number;
   nombreCourses?: number;
   nombreVictoires?: number;
@@ -75,6 +92,7 @@ export interface Participant {
   deferre?: string;
   oeilleres?: string;
   poidsConditionMonte?: number;
+  incident?: string;
 }
 
 export interface ParticipantsResponse {
@@ -97,6 +115,15 @@ export interface PronosticsResponse {
 export interface PronosticsDetaillesResponse {
   commentaire?: { texte?: string; source?: string } | string;
   source?: string;
+}
+
+export interface ArriveeEntry {
+  place: number;
+  numPmu: number;
+  nom: string;
+  statut: string;
+  ecart: string;
+  rapport?: number;
 }
 
 export interface CourseDetail {

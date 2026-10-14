@@ -1,4 +1,6 @@
 import type {
+  ArriveeEntry,
+  ArriveeOfficielle,
   Course,
   Pari,
   Participant,
@@ -252,6 +254,99 @@ export function sexeLabel(sexe: string | undefined | null): string {
   if (s === "M" || s === "MALE") return "Mâle";
   if (s === "F" || s === "FEMELLE") return "Femelle";
   return String(sexe ?? "");
+}
+
+export function courseStatus(course: Course | null | undefined): string {
+  return String(course?.statut ?? "").toUpperCase();
+}
+
+export function isCourseFinished(course: Course | null | undefined): boolean {
+  if (!course) return false;
+  if (course.arriveeDefinitive === true || course.isArriveeDefinitive === true) return true;
+  const s = courseStatus(course);
+  if (
+    s.indexOf("ARRIVEE") >= 0 ||
+    s.indexOf("FIN") >= 0 ||
+    s.indexOf("TERMIN") >= 0 ||
+    s.indexOf("OFFICIEL") >= 0 ||
+    s === "FINISHED" ||
+    s === "RESULTED"
+  ) {
+    return true;
+  }
+  return Array.isArray(course.ordreArrivee) && course.ordreArrivee.length > 0;
+}
+
+export function finishOrder(participants: Participant[] | null | undefined): ArriveeEntry[] {
+  if (!Array.isArray(participants)) return [];
+  return participants
+    .map((p) => {
+      const place = Number(p?.ordreArrivee ?? p?.positionArrivee);
+      return {
+        place,
+        numPmu: Number(p?.numPmu) || 0,
+        nom: String(p?.nom || ""),
+        statut: String(p?.statut || p?.incident || ""),
+        ecart: "",
+        rapport: p?.dernierRapportDirect?.rapport ?? p?.rapportDirect,
+        participant: p,
+      };
+    })
+    .filter((row) => Number.isFinite(row.place) && row.place > 0)
+    .sort((a, b) => a.place - b.place || a.numPmu - b.numPmu)
+    .map(({ participant: _ignored, ...row }) => row);
+}
+
+export function arrivalFromCourse(
+  course: Course | null | undefined,
+  participants: Participant[] | null | undefined
+): ArriveeEntry[] {
+  const fromParts = finishOrder(participants);
+  if (fromParts.length > 0) return fromParts;
+  const raw = course?.ordreArrivee;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const byNum = new Map<number, Participant>();
+  if (Array.isArray(participants)) {
+    for (const p of participants) {
+      const num = Number(p?.numPmu);
+      if (Number.isFinite(num)) byNum.set(num, p);
+    }
+  }
+  return raw
+    .map((item, index) => {
+      if (typeof item === "number") {
+        const horse = byNum.get(item);
+        return {
+          place: index + 1,
+          numPmu: item,
+          nom: String(horse?.nom || ""),
+          statut: "",
+          ecart: "",
+          rapport: horse?.dernierRapportDirect?.rapport,
+        };
+      }
+      const row = item as ArriveeOfficielle;
+      const num = Number(row?.numPmu ?? row?.numero) || 0;
+      const horse = byNum.get(num);
+      return {
+        place: Number(row?.position) || index + 1,
+        numPmu: num,
+        nom: String(row?.nom || horse?.nom || ""),
+        statut: String(row?.statut || ""),
+        ecart: String(row?.ecart || row?.temps || ""),
+        rapport: row?.rapportDirect ?? row?.rapport ?? horse?.dernierRapportDirect?.rapport,
+      };
+    })
+    .filter((row) => row.place > 0 && (row.numPmu > 0 || row.nom))
+    .sort((a, b) => a.place - b.place);
+}
+
+export function arrivalPreview(entries: ArriveeEntry[] | null | undefined, max = 5): string {
+  if (!Array.isArray(entries) || entries.length === 0) return "";
+  return entries
+    .slice(0, max)
+    .map((row) => String(row.numPmu || "–"))
+    .join(" - ");
 }
 
 function extractReunions(payload: ProgrammeResponse | Reunion[] | null | undefined): Reunion[] {

@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Heart, Star } from "lucide-react";
+import ArriveeBlock from "../components/ArriveeBlock";
 import Header from "../components/Header";
 import ResponsiblePlay from "../components/ResponsiblePlay";
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "../components/StatusMessage";
 import { addFavorite, listFavorites, removeFavorite, type FavoriteCourse } from "../lib/db";
 import {
+  arrivalFromCourse,
   disciplineLabel,
   driverOf,
   fetchCommentaire,
@@ -13,6 +15,7 @@ import {
   formatCote,
   formatHeure,
   hippodromeLabel,
+  isCourseFinished,
   isNonPartant,
   parseInputDate,
   sexeLabel,
@@ -147,6 +150,8 @@ export default function PartantsPage({
     return [...participants].sort((a, b) => (Number(a?.numPmu) || 99) - (Number(b?.numPmu) || 99));
   }, [participants]);
 
+  const finished = isCourseFinished(course);
+  const arrival = useMemo(() => arrivalFromCourse(course, participants), [course, participants]);
   const jeux = uniqueParis(course?.paris);
 
   async function toggleFavorite() {
@@ -237,6 +242,7 @@ export default function PartantsPage({
                       }`}
                     >
                       C{String(c?.numOrdre ?? "")} · {formatHeure(c?.heureDepart)}
+                      {isCourseFinished(c) ? " · Arrivée" : ""}
                     </button>
                   );
                 })}
@@ -244,13 +250,25 @@ export default function PartantsPage({
             )}
 
             {course && reunion ? (
-              <CourseCard reunion={reunion} course={course} favId={favId} favBusy={favBusy} onToggleFav={toggleFavorite} />
+              <CourseCard
+                reunion={reunion}
+                course={course}
+                finished={finished}
+                favId={favId}
+                favBusy={favBusy}
+                onToggleFav={toggleFavorite}
+              />
             ) : (
               <EmptyBlock message="Sélectionnez une course pour afficher sa fiche." />
             )}
 
-            {loading ? <LoadingBlock label="Chargement des partants et du pronostic…" /> : null}
+            {loading ? <LoadingBlock label="Chargement des partants, de l'arrivée et du pronostic…" /> : null}
             {!loading && error ? <ErrorBlock message={error} onRetry={onRefresh} /> : null}
+
+            {!loading && finished && arrival.length > 0 ? <ArriveeBlock entries={arrival} /> : null}
+            {!loading && finished && arrival.length === 0 && !error ? (
+              <EmptyBlock message="Course terminée. L'arrivée officielle n'est pas encore publiée." />
+            ) : null}
 
             {!loading && course ? (
               <PronosticBlock selection={selection} participants={byNum} commentaire={commentaire} jeux={jeux} />
@@ -284,12 +302,14 @@ export default function PartantsPage({
 function CourseCard({
   reunion,
   course,
+  finished,
   favId,
   favBusy,
   onToggleFav,
 }: {
   reunion: Reunion;
   course: Course;
+  finished: boolean;
   favId: string | null;
   favBusy: boolean;
   onToggleFav: () => void;
@@ -304,6 +324,11 @@ function CourseCard({
           <h2 className="mt-1 text-2xl font-black leading-tight text-white">
             {String(course.libelle || `Course ${String(course.numOrdre ?? "")}`)}
           </h2>
+          {finished ? (
+            <p className="mt-2 inline-flex rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-black uppercase text-[#062214]">
+              Course terminée
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -428,6 +453,8 @@ function PronosticBlock({
 
 function PartantRow({ participant }: { participant: Participant }) {
   const np = isNonPartant(participant);
+  const place = Number(participant?.ordreArrivee ?? participant?.positionArrivee);
+  const placed = Number.isFinite(place) && place > 0;
   const sexe = sexeLabel(participant?.sexe);
   const age = participant?.age ? `${String(participant.age)} ans` : "";
   return (
@@ -440,6 +467,11 @@ function PartantRow({ participant }: { participant: Participant }) {
           <div className="flex items-start justify-between gap-2">
             <p className="truncate text-base font-bold text-white">
               {String(participant?.nom || "Cheval")}
+              {placed ? (
+                <span className="ml-2 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-black text-[#062214]">
+                  {String(place)}e
+                </span>
+              ) : null}
               {np ? <span className="ml-2 text-xs font-semibold text-red-300">Non-partant</span> : null}
             </p>
             <p className="shrink-0 text-sm font-black text-amber-300">{formatCote(participant?.dernierRapportDirect?.rapport)}</p>

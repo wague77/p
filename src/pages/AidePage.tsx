@@ -1,5 +1,5 @@
 import React from "react";
-import { BookOpen, ShieldCheck, Smartphone } from "lucide-react";
+import { BookOpen, Flag, History, Lock, ShieldCheck, Smartphone } from "lucide-react";
 import ResponsiblePlay from "../components/ResponsiblePlay";
 
 export default function AidePage() {
@@ -9,10 +9,33 @@ export default function AidePage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Mode d'emploi</p>
         <h1 className="text-2xl font-black text-white">Comment lire Partants PMU</h1>
         <p className="mt-1 text-sm leading-relaxed text-emerald-100/80">
-          L'application affiche le programme, les partants et le pronostic publiés par le service
-          Turfinfo. Elle ne prend aucun pari. L'accès est soumis à une approbation obligatoire.
+          L'application affiche le programme, les partants, le pronostic et l'arrivée des courses
+          terminées. Elle ne prend aucun pari. L'accès est soumis à une approbation obligatoire.
         </p>
       </header>
+
+      <article className="rounded-3xl border border-emerald-800 bg-[#0b3222] p-4">
+        <div className="mb-2 flex items-center gap-2 text-amber-300">
+          <History className="h-5 w-5" />
+          <h2 className="font-bold text-white">Historique Quinté</h2>
+        </div>
+        <p className="text-sm leading-relaxed text-emerald-50/90">
+          L'onglet Historique ne lit que les courses de Quinté : pronostic et arrivée sur 1 mois, 3
+          mois ou 1 an. À partir de cet historique, il classe le prochain Quinté de la réunion en
+          favoris, outsiders et un tocard à glisser. Ce n'est pas une promesse de gain.
+        </p>
+      </article>
+
+      <article className="rounded-3xl border border-emerald-800 bg-[#0b3222] p-4">
+        <div className="mb-2 flex items-center gap-2 text-amber-300">
+          <Flag className="h-5 w-5" />
+          <h2 className="font-bold text-white">Courses terminées</h2>
+        </div>
+        <p className="text-sm leading-relaxed text-emerald-50/90">
+          Dès qu'une course est terminée, l'arrivée officielle s'affiche : place, numéro, nom du
+          cheval et cote. Le même ordre est rappelé sur la fiche de la course et sur chaque partant.
+        </p>
+      </article>
 
       <article className="rounded-3xl border border-emerald-800 bg-[#0b3222] p-4">
         <div className="mb-2 flex items-center gap-2 text-amber-300">
@@ -21,8 +44,18 @@ export default function AidePage() {
         </div>
         <p className="text-sm leading-relaxed text-emerald-50/90">
           Au premier lancement, indiquez votre nom et un contact. La demande reste en attente tant
-          qu'un responsable ne l'a pas approuvée dans l'onglet Accès. Sans approbation, le programme
-          des courses ne s'affiche pas.
+          qu'un admin ne l'a pas approuvée. Sans approbation, le programme des courses ne s'affiche pas.
+        </p>
+      </article>
+
+      <article className="rounded-3xl border border-emerald-800 bg-[#0b3222] p-4">
+        <div className="mb-2 flex items-center gap-2 text-amber-300">
+          <Lock className="h-5 w-5" />
+          <h2 className="font-bold text-white">Tableau de bord admin</h2>
+        </div>
+        <p className="text-sm leading-relaxed text-emerald-50/90">
+          L'espace admin, ouvert depuis l'écran d'accès, demande un mot de passe. Deux tentatives
+          incorrectes bloquent la connexion admin sur cet appareil.
         </p>
       </article>
 
