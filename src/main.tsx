@@ -45,14 +45,15 @@ function BootFallback({ message }: { message: string }) {
 
 const rootEl = document.getElementById("root");
 if (rootEl) {
+  const root = createRoot(rootEl);
   try {
-    createRoot(rootEl).render(
+    root.render(
       <React.StrictMode>
         <App />
       </React.StrictMode>
     );
   } catch (error) {
     const message = error instanceof Error ? String(error.message ?? "") : String(error ?? "");
-    createRoot(rootEl).render(<BootFallback message={message || "Impossible d'ouvrir l'application."} />);
+    root.render(<BootFallback message={message || "Impossible d'ouvrir l'application."} />);
   }
 }

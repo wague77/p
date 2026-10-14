@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { History, Sparkles, Trophy } from "lucide-react";
 import ResponsiblePlay from "../components/ResponsiblePlay";
 import { EmptyBlock, ErrorBlock, LoadingBlock } from "../components/StatusMessage";
@@ -40,50 +40,41 @@ export default function HistoriquePage({ reunions, dateValue, loadingProgramme }
   const date = useMemo(() => parseInputDate(dateValue), [dateValue]);
   const quinte = useMemo(() => findQuinte(Array.isArray(reunions) ? reunions : []), [reunions]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      setLoading(true);
-      setError("");
-      setReport(null);
-      setProgress("Recherche du Quinté de la réunion…");
-      try {
-        let advice = undefined;
-        let next: HistoryReport["next"] = null;
-        if (quinte) {
-          const rNum = Number(quinte.reunion.numOfficiel);
-          const cNum = Number(quinte.course.numOrdre);
-          next = {
-            reunion: rNum,
-            course: cNum,
-            hippodrome: hippodromeLabel(quinte.reunion),
-            libelle: String(quinte.course.libelle || `Course ${cNum}`),
-            heure: formatHeure(quinte.course.heureDepart),
-            date: String(dateValue ?? ""),
-          };
-          const [parts, selection] = await Promise.all([
-            fetchParticipants(date, rNum, cNum).catch(() => [] as Participant[]),
-            fetchPronostics(date, rNum, cNum).catch(() => [] as SelectionItem[]),
-          ]);
-          advice = currentQuinteHorses(Array.isArray(selection) ? selection : [], Array.isArray(parts) ? parts : []);
-        }
-        const races = await loadHistory(range, date, (done, total) => {
-          if (!cancelled) setProgress(`${done} / ${total} jours lus · Quintés uniquement`);
-        });
-        if (cancelled) return;
-        setReport(buildReport(races, range === "1m" ? 31 : range === "3m" ? 92 : 366, next, advice));
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? String(err.message ?? "") : "Historique indisponible.");
-      } finally {
-        if (!cancelled) setLoading(false);
+  async function run() {
+    setLoading(true);
+    setError("");
+    setProgress("Recherche du Quinté de la réunion…");
+    try {
+      let advice = undefined;
+      let next: HistoryReport["next"] = null;
+      if (quinte) {
+        const rNum = Number(quinte.reunion.numOfficiel);
+        const cNum = Number(quinte.course.numOrdre);
+        next = {
+          reunion: rNum,
+          course: cNum,
+          hippodrome: hippodromeLabel(quinte.reunion),
+          libelle: String(quinte.course.libelle || `Course ${cNum}`),
+          heure: formatHeure(quinte.course.heureDepart),
+          date: String(dateValue ?? ""),
+        };
+        const [parts, selection] = await Promise.all([
+          fetchParticipants(date, rNum, cNum).catch(() => [] as Participant[]),
+          fetchPronostics(date, rNum, cNum).catch(() => [] as SelectionItem[]),
+        ]);
+        advice = currentQuinteHorses(Array.isArray(selection) ? selection : [], Array.isArray(parts) ? parts : []);
       }
+      const races = await loadHistory(range, date, (done, total) => {
+        setProgress(`${done} / ${total} jours lus · Quintés uniquement`);
+      });
+      setReport(buildReport(races, range === "1m" ? 31 : range === "3m" ? 92 : 366, next, advice));
+    } catch (err) {
+      setReport(null);
+      setError(err instanceof Error ? String(err.message ?? "") : "Historique indisponible.");
+    } finally {
+      setLoading(false);
     }
-    if (!loadingProgramme) run();
-    return () => {
-      cancelled = true;
-    };
-  }, [range, date, dateValue, quinte, loadingProgramme]);
+  }
 
   const races = Array.isArray(report?.races) ? report.races : [];
   const advice = Array.isArray(report?.advice) ? report.advice : [];
@@ -94,8 +85,8 @@ export default function HistoriquePage({ reunions, dateValue, loadingProgramme }
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Quinté seulement</p>
         <h1 className="text-2xl font-black text-white">Historique des pronostics</h1>
         <p className="mt-1 text-sm leading-relaxed text-emerald-100/80">
-          Chaque pronostic affiche le top 8, pas seulement les cinq premiers. Arrivées des courses de
-          Quinté sur 1 mois, 3 mois ou 1 an. Favoris, outsiders et tocard concernent le prochain Quinté.
+          Chaque pronostic affiche le top 8. L'analyse ne démarre que lorsque vous la lancez, pour ne
+          pas bloquer le programme du jour.
         </p>
       </header>
 
@@ -104,7 +95,10 @@ export default function HistoriquePage({ reunions, dateValue, loadingProgramme }
           <button
             key={key}
             type="button"
-            onClick={() => setRange(key)}
+            onClick={() => {
+              setRange(key);
+              setReport(null);
+            }}
             className={`min-h-11 flex-1 rounded-full text-sm font-bold ${
               range === key ? "bg-amber-400 text-[#062214]" : "border border-emerald-700 bg-[#0a3320] text-emerald-50"
             }`}
@@ -114,12 +108,23 @@ export default function HistoriquePage({ reunions, dateValue, loadingProgramme }
         ))}
       </div>
 
+      <button
+        type="button"
+        onClick={run}
+        disabled={loading || loadingProgramme}
+        className="min-h-11 rounded-xl bg-amber-400 text-sm font-bold text-[#062214] disabled:opacity-60"
+      >
+        {loading ? "Analyse en cours…" : `Analyser les Quintés sur ${rangeLabel(range)}`}
+      </button>
+
       <ResponsiblePlay />
 
-      {loadingProgramme || loading ? (
-        <LoadingBlock label={progress || "Lecture de l'historique Quinté…"} />
+      {loadingProgramme || loading ? <LoadingBlock label={progress || "Lecture de l'historique Quinté…"} /> : null}
+      {!loading && error ? <ErrorBlock message={error} onRetry={run} /> : null}
+
+      {!loading && !report && !error ? (
+        <EmptyBlock message="Choisissez 1 mois, 3 mois ou 1 an, puis touchez Analyser. Le top 8 de chaque Quinté s'affichera avec l'arrivée." />
       ) : null}
-      {!loading && error ? <ErrorBlock message={error} /> : null}
 
       {!loading && report ? (
         <>

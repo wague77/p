@@ -34,22 +34,6 @@ function readSelection(): Selection {
   }
 }
 
-function raceTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(label)), ms);
-    work.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      }
-    );
-  });
-}
-
 class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { message: string }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
@@ -142,13 +126,13 @@ function Shell() {
       setLoading(true);
       setError("");
       try {
-        const list = await raceTimeout(
-          fetchProgramme(date),
-          9000,
-          "Le programme PMU ne répond pas. Touchez Réessayer."
-        );
+        const list = await fetchProgramme(date);
         if (cancelled) return;
-        setReunions(Array.isArray(list) ? list : []);
+        const safe = Array.isArray(list) ? list : [];
+        setReunions(safe);
+        if (safe.length === 0) {
+          setError("Aucune réunion n'est publiée pour cette date. Choisissez un autre jour ou touchez Réessayer.");
+        }
       } catch (err) {
         if (cancelled) return;
         setReunions([]);
@@ -207,9 +191,7 @@ function Shell() {
             },
             {
               path: "/historique",
-              element: (
-                <HistoriquePage reunions={safeReunions} dateValue={dateValue} loadingProgramme={loading} />
-              ),
+              element: <HistoriquePage reunions={safeReunions} dateValue={dateValue} loadingProgramme={loading} />,
             },
             { path: "/favoris", element: <FavorisPage onOpen={openFavorite} /> },
             { path: "/aide", element: <AidePage /> },
