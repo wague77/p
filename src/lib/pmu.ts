@@ -24,6 +24,9 @@ declare global {
   }
 }
 
+const PMU_ORIGIN = "https://offline.turfinfo.api.pmu.fr";
+const PMU_PREFIX = "/rest/client/7/programme/";
+
 function safeDate(input: Date | null | undefined): Date {
   if (input instanceof Date && !Number.isNaN(input.getTime())) return input;
   return new Date();
@@ -112,14 +115,14 @@ export function formatHeure(value: number | string | undefined | null): string {
 export function hippodromeLabel(reunion: Reunion | null | undefined): string {
   const court = reunion?.hippodrome?.libelleCourt;
   const long = reunion?.hippodrome?.libelleLong;
-  return String(court || long || "Vincennes").toUpperCase();
+  return String(court || long || "Hippodrome").toUpperCase();
 }
 
 export function paysLabel(reunion: Reunion | null | undefined): string {
   const pays = reunion?.pays;
-  if (!pays) return "FR";
+  if (!pays) return "";
   if (typeof pays === "string") return String(pays);
-  return String(pays.libelle || pays.code || "FR");
+  return String(pays.libelle || pays.code || "");
 }
 
 export function cleanPariCode(code: string | undefined | null): string {
@@ -229,7 +232,7 @@ export function isNonPartant(p: Participant | null | undefined): boolean {
 }
 
 export function driverOf(p: Participant | null | undefined): string {
-  return String(p?.driver || p?.jockey || "").trim() || "J. M. Bazire";
+  return String(p?.driver || p?.jockey || "").trim() || "—";
 }
 
 export function formatCote(value: number | string | undefined | null): string {
@@ -248,7 +251,7 @@ export function sexeLabel(sexe: string | undefined | null): string {
   if (s === "H" || s === "HONGRE") return "Hongre";
   if (s === "M" || s === "MALE") return "Mâle";
   if (s === "F" || s === "FEMELLE") return "Femelle";
-  return String(sexe ?? "Hongre");
+  return String(sexe ?? "");
 }
 
 function extractReunions(payload: ProgrammeResponse | Reunion[] | null | undefined): Reunion[] {
@@ -257,32 +260,42 @@ function extractReunions(payload: ProgrammeResponse | Reunion[] | null | undefin
   return Array.isArray(list) ? list : [];
 }
 
-function cleanApiPath(path: string): string {
+export function pmuUrl(path: string): string {
   const clean = String(path ?? "")
     .replace(/^\/+/, "")
     .split("?")[0]
-    .split("#")[0];
+    .split("#")[0]
+    .trim();
   if (!/^\d{8}(?:\/R\d+\/C\d+\/[a-z0-9-]+)?$/i.test(clean)) {
-    throw new Error("Adresse Wague invalide.");
+    throw new Error("Adresse PMU invalide. Actualisez le programme.");
   }
-  return clean;
-}
-
-function turfEndpoint(path: string): string {
-  const clean = cleanApiPath(path);
-  const scheme = ["ht", "tps"].join("");
-  const host = ["offline", "turfinfo", "api", "pmu", "fr"].join(".");
-  const prefix = ["", "rest", "client", "7", "programme", ""].join("/");
-  return scheme + "://" + host + prefix + clean;
-}
-
-function sameOriginPath(path: string): string {
-  return "/api/pmu/" + cleanApiPath(path);
+  return PMU_ORIGIN + PMU_PREFIX + clean;
 }
 
 function novaFetchFn(): ((input: string, init?: RequestInit) => Promise<Response>) | null {
-  const fn = window.nova && window.nova.fetch;
-  return typeof fn === "function" ? fn.bind(window.nova) : null;
+  try {
+    const fn = window.nova && window.nova.fetch;
+    if (typeof fn !== "function") return null;
+    return fn.bind(window.nova);
+  } catch {
+    return null;
+  }
+}
+
+function readableError(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? String(err.message ?? "") : String(err ?? "");
+  const low = message.toLowerCase();
+  if (
+    low.indexOf("invalid url") >= 0 ||
+    low.indexOf("failed to construct") >= 0 ||
+    low.indexOf("failed to fetch") >= 0 ||
+    low.indexOf("network") >= 0 ||
+    low.indexOf("load failed") >= 0 ||
+    low.indexOf("cors") >= 0
+  ) {
+    return "Le programme PMU n'est pas joignable depuis cet écran. Touchez Actualiser, ou ouvrez l'application dans l'atelier NOVA.";
+  }
+  return message || fallback;
 }
 
 async function readBody(res: Response): Promise<string> {
@@ -295,14 +308,14 @@ async function readBody(res: Response): Promise<string> {
 
 function parsePayload<T>(text: string): T {
   const trimmed = String(text ?? "").trim();
-  if (!trimmed) throw new Error("Réponse vide du service Wague.");
+  if (!trimmed) throw new Error("Réponse vide du service PMU.");
   if (trimmed.charAt(0) !== "{" && trimmed.charAt(0) !== "[") {
-    throw new Error("Réponse Wague illisible.");
+    throw new Error("Réponse PMU illisible. Réessayez.");
   }
   try {
     return JSON.parse(trimmed) as T;
   } catch {
-    throw new Error("Réponse Wague illisible.");
+    throw new Error("Réponse PMU illisible. Réessayez.");
   }
 }
 
@@ -310,34 +323,35 @@ async function callJson<T>(
   requester: (input: string, init?: RequestInit) => Promise<Response>,
   href: string
 ): Promise<T> {
-  const res = await requester(href, {
+  const target = String(href ?? "");
+  if (target.indexOf("https://") !== 0) {
+    throw new Error("Adresse PMU invalide. Actualisez le programme.");
+  }
+  const res = await requester(target, {
     method: "GET",
     headers: { Accept: "application/json" },
   });
   const text = await readBody(res);
   if (!res || !res.ok) {
     const status = res && typeof res.status === "number" ? String(res.status) : "erreur";
-    throw new Error("Le service Wague a répondu " + status + ".");
+    throw new Error("Le service PMU a répondu " + status + ".");
   }
   return parsePayload<T>(text);
 }
 
 async function requestJson<T>(path: string): Promise<T> {
-  const errors: string[] = [];
+  const href = pmuUrl(path);
   const viaNova = novaFetchFn();
-  if (viaNova) {
-    try {
-      return await callJson<T>(viaNova, turfEndpoint(path));
-    } catch (err) {
-      errors.push(err instanceof Error ? String(err.message ?? "") : String(err ?? ""));
-    }
+  if (!viaNova) {
+    throw new Error(
+      "Le programme PMU n'est pas joignable depuis ce lien. Ouvrez l'application dans l'atelier NOVA, ou réessayez."
+    );
   }
   try {
-    return await callJson<T>(fetch, sameOriginPath(path));
+    return await callJson<T>(viaNova, href);
   } catch (err) {
-    errors.push(err instanceof Error ? String(err.message ?? "") : String(err ?? ""));
+    throw new Error(readableError(err, "Le programme PMU n'est pas joignable. Réessayez."));
   }
-  throw new Error(errors.join(" ") || "Le service Wague n'est pas joignable.");
 }
 
 function coursePath(date: Date, reunion: number, course: number, leaf: string): string {
@@ -351,161 +365,45 @@ function coursePath(date: Date, reunion: number, course: number, leaf: string): 
   return stamp + "/R" + String(r) + "/C" + String(c) + "/" + safeLeaf;
 }
 
-// Fallback robust generator when PMU API returns 500 or is unreachable
-function getFallbackReunions(date: Date): Reunion[] {
-  const dateStr = toInputDate(date);
-  return [
-  {
-    numOfficiel: 1,
-    hippodrome: { libelleCourt: "VINCENNES", libelleLong: "Hippodrome de Paris-Vincennes" },
-    pays: { code: "FR", libelle: "France" },
-    courses: [
-      {
-        numOrdre: 1,
-        libelle: "Prix d'Amérique Legend Race (Quinté+)",
-        libelleCourt: "Prix d'Amérique",
-        discipline: "ATTELE",
-        heureDepart: 151500,
-        paris: [{ codePari: "QUINTE_PLUS", libelle: "Quinté+" }, { codePari: "SIMPLE_GAGNANT", libelle: "Simple Gagnant" }],
-      },
-      {
-        numOrdre: 2,
-        libelle: "Prix de Belgique",
-        libelleCourt: "Prix de Belgique",
-        discipline: "ATTELE",
-        heureDepart: 155000,
-        paris: [{ codePari: "SIMPLE_GAGNANT", libelle: "Simple Gagnant" }],
-      },
-      {
-        numOrdre: 3,
-        libelle: "Prix de Cornulier",
-        libelleCourt: "Prix de Cornulier",
-        discipline: "MONTE",
-        heureDepart: 162500,
-        paris: [{ codePari: "QUINTE_PLUS", libelle: "Quinté+" }],
-      },
-    ],
-  },
-  {
-    numOfficiel: 2,
-    hippodrome: { libelleCourt: "LONGCHAMP", libelleLong: "Hippodrome ParisLongchamp" },
-    pays: { code: "FR", libelle: "France" },
-    courses: [
-      {
-        numOrdre: 1,
-        libelle: "Prix de l'Arc de Triomphe",
-        libelleCourt: "Prix de l'Arc",
-        discipline: "PLAT",
-        heureDepart: 160000,
-        paris: [{ codePari: "QUINTE_PLUS", libelle: "Quinté+" }],
-      },
-    ],
-  },
-];
-}
-
-function getFallbackParticipants(): Participant[] {
-  const names = [
-    "HOHNECK", "IDAO DE TILLARD", "GO ON BOY", "EMERAUDE DE BAIS", "HUSSARD DU LANDRET",
-    "AM Investment", "IDEAL DU VALLON", "HASUR D'AVIGNON", "FALCO D'HAP", "GIPSY DES CAUX",
-    "GENDREEN", "INTO THE WILD", "IT'S A DOLLAMEU", "HARLEY GED", "GU D'HERIPRE", "HERO SIBEY"
-  ];
-  return names.map((nom, idx) => ({
-    numPmu: idx + 1,
-    nom,
-    driver: idx % 2 === 0 ? "J.M. Bazire" : "E. Raffin",
-    entraineur: "F. Leblanc",
-    musique: "1a 2a 3a 1a Da",
-    age: 7,
-    sexe: "H",
-    nombreCourses: 30,
-    nombreVictoires: 10,
-    gainCarriere: 450000 + idx * 12000,
-    cote_prob: Number((2.5 + idx * 1.8).toFixed(1)),
+export async function fetchProgramme(date: Date): Promise<Reunion[]> {
+  const stamp = formatDateJJMMAAAA(date);
+  const data = await requestJson<ProgrammeResponse>(stamp);
+  const reunions = extractReunions(data)
+    .filter((item) => item && typeof item === "object")
+    .sort((a, b) => (Number(a?.numOfficiel) || 0) - (Number(b?.numOfficiel) || 0));
+  return reunions.map((item) => ({
+    ...item,
+    courses: Array.isArray(item.courses)
+      ? [...item.courses].sort((a, b) => (Number(a?.numOrdre) || 0) - (Number(b?.numOrdre) || 0))
+      : [],
   }));
 }
 
-function getFallbackPronostics(): SelectionItem[] {
-  return [
-    { rang: 1, numPartant: 2, nom: "IDAO DE TILLARD", coteProb: 3.2 },
-    { rang: 2, numPartant: 1, nom: "HOHNECK", coteProb: 4.5 },
-    { rang: 3, numPartant: 3, nom: "GO ON BOY", coteProb: 6.0 },
-    { rang: 4, numPartant: 5, nom: "HUSSARD DU LANDRET", coteProb: 8.5 },
-    { rang: 5, numPartant: 4, nom: "EMERAUDE DE BAIS", nomCheval: "EMERAUDE DE BAIS", coteProb: 11.0 },
-    { rang: 6, numPartant: 6, nom: "IDEAL DU VALLON", coteProb: 14.0 },
-    { rang: 7, numPartant: 8, nom: "FALCO D'HAP", coteProb: 18.0 },
-    { rang: 8, numPartant: 7, nom: "HASUR D'AVIGNON", coteProb: 22.0 },
-    { rang: 9, numPartant: 10, nom: "GENDREEN", coteProb: 28.0 },
-  ];
-}
-
-export async function fetchProgramme(date: Date): Promise<Reunion[]> {
-  const stamp = formatDateJJMMAAAA(date);
-  const cacheKey = `partants-wague-cache-prog-${stamp}`;
-  try {
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  const fallback = getFallbackReunions(date);
-  try {
-    localStorage.setItem(cacheKey, JSON.stringify(fallback));
-  } catch {
-    /* ignore */
-  }
-  return fallback;
-}
-
 export async function fetchParticipants(date: Date, reunion: number, course: number): Promise<Participant[]> {
-  const stamp = formatDateJJMMAAAA(date);
-  const cacheKey = `partants-wague-cache-parts-${stamp}-R${reunion}-C${course}`;
-  try {
-    const data = await requestJson<ParticipantsResponse | Participant[]>(coursePath(date, reunion, course, "participants"));
-    const list = Array.isArray(data) ? data : data?.participants || [];
-    const result = Array.isArray(list) ? list : [];
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(result));
-    } catch {
-      /* ignore */
-    }
-    return result;
-  } catch (err) {
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      /* ignore */
-    }
-    return getFallbackParticipants();
-  }
+  const data = await requestJson<ParticipantsResponse | Participant[]>(
+    coursePath(date, reunion, course, "participants")
+  );
+  const list = Array.isArray(data) ? data : data?.participants || [];
+  return Array.isArray(list) ? list : [];
 }
 
 export async function fetchPronostics(date: Date, reunion: number, course: number): Promise<SelectionItem[]> {
-  try {
-    const data = await requestJson<PronosticsResponse | SelectionItem[]>(coursePath(date, reunion, course, "pronostics"));
-    const list = Array.isArray(data) ? data : data?.selection || [];
-    return Array.isArray(list) && list.length > 0 ? [...list].sort((a, b) => (Number(a?.rang) || 99) - (Number(b?.rang) || 99)) : getFallbackPronostics();
-  } catch {
-    return getFallbackPronostics();
-  }
+  const data = await requestJson<PronosticsResponse | SelectionItem[]>(
+    coursePath(date, reunion, course, "pronostics")
+  );
+  const list = Array.isArray(data) ? data : data?.selection || [];
+  return Array.isArray(list)
+    ? [...list].sort((a, b) => (Number(a?.rang) || 99) - (Number(b?.rang) || 99))
+    : [];
 }
 
 export async function fetchCommentaire(date: Date, reunion: number, course: number): Promise<string> {
-  try {
-    const data = await requestJson<PronosticsDetaillesResponse>(coursePath(date, reunion, course, "pronostics-detailles"));
-    if (!data) return "Analyse Wague exclusive : Course ouverte avec des favoris solides et des outsiders redoutables pour le Quinté+.";
-    if (typeof data.commentaire === "string") return String(data.commentaire);
-    return String(data.commentaire?.texte || "Analyse Wague exclusive : Course ouverte avec des favoris solides et des outsiders redoutables pour le Quinté+.");
-  } catch {
-    return "Analyse Wague exclusive : Course ouverte avec des favoris solides et des outsiders redoutables pour le Quinté+.";
-  }
+  const data = await requestJson<PronosticsDetaillesResponse>(
+    coursePath(date, reunion, course, "pronostics-detailles")
+  );
+  if (!data) return "";
+  if (typeof data.commentaire === "string") return String(data.commentaire);
+  return String(data.commentaire?.texte || "");
 }
 
 export function courseCount(reunions: Reunion[] | null | undefined): number {
